@@ -1,77 +1,137 @@
-ご提示いただいたミーティング議事録や関連資料に基づき、AI開発エージェント（Cursor、Cline、GitHub Copilotなど）に読み込ませて開発を進行させるための `AGENTS.md`（または `prompt.md`）のひな形を作成しました。
+# Project: 表情変化・ストレス検出デモアプリ
 
-このドキュメントは、目的、技術スタック、機能要件、およびAIエージェントがコードを生成する際の具体的な指示をまとめています。
+## 1. 目的
+本プロジェクトは研究用途の Web アプリです。被験者に「趣味の話」と「仕事のストレスの話」をしてもらい、その際の顔の表情変化を MediaPipe で解析して時系列保存します。
 
----
+重要な前提は以下です。
 
-### `AGENTS.md` 出力案
+- 画面上には通常の Web カメラ映像を表示する
+- 映像ファイルや静止画は保存しない
+- 保存対象は MediaPipe が返す顔特徴量データのみ
+- 解析と保存はブラウザ内で完結させる
 
-```markdown
-# Project: 表情変化・ストレス検出デモアプリ (Research Purpose)
+## 2. 現在の技術スタック
+- フレームワーク: React + TypeScript
+- ビルドツール: Vite
+- 顔解析: `@mediapipe/tasks-vision` の Face Landmarker
+- 保存: IndexedDB
+- 配布先: GitHub Pages
 
-## 1. プロジェクト概要
-本プロジェクトは、研究目的で被験者に「趣味の話（リラックス）」と「仕事の話（ストレス）」をしてもらい、その際の顔の表情変化を検出・記録するWebアプリケーションの初期デモを作成するものです。
-プライバシーに配慮し、実際の顔画像（録画ビデオ）は保存せず、顔の「スケッチデータ（顔のランドマーク座標やメッシュの描画）」のみを収集・表示します。将来的にどの指標が有効になるか未知数なため、取得可能な顔のトラッキングデータはすべて時系列で収集して出力できるようにします。
+GitHub Pages 向けの前提:
 
-## 2. 技術スタックとデプロイ要件
-*   **フレームワーク**: React (Functional Components, Hooks)
-*   **ビルドツール**: Vite
-*   **顔認識ライブラリ**: MediaPipe Face Landmarker (Web / JavaScript API) `@mediapipe/tasks-vision`
-*   **スタイリング**: CSS Modules または Tailwind CSS (エージェントの推奨に任せるが、研究用デモとしてシンプルで堅牢なUIを目指す)
-*   **ホスティング/デプロイ**: GitHub Pages
-    *   **重要要件**: GitHub Pagesで公開するため、Viteのビルド出力先ディレクトリをデフォルトの `dist` から `docs` に変更すること。(`vite.config.js` にて `build: { outDir: 'docs' }` を設定し、`base` パスも適切に設定する)
+- `vite.config.ts` で `base: "/facial-expression-logger/"` を使う
+- ビルド出力先は `docs/`
+- Face Landmarker モデルは `public/models/face_landmarker.task` に置く
 
-## 3. 主要機能要件
-1.  **質問提示機能**:
-    *   画面上に「あなたの趣味について教えてください（リラックス）」「現在の仕事の課題やストレスについて教えてください（ストレス）」といったテーマを提示するUI。
-2.  **カメラキャプチャとリアルタイム解析**:
-    *   Webカメラを起動し、MediaPipe Face Landmarkerを用いて顔をリアルタイムで解析する(`running_mode: VIDEO`)。
-3.  **スケッチデータ（骨格）の描画**:
-    *   `<video>` 要素自体は画面外に隠すか非表示にし、代わりに `<canvas>` 要素にMediaPipeの `DrawingUtils` を用いて顔のメッシュ（ランドマークとコネクタ）のみを描画する。
-    *   これにより、被験者の顔画像そのものではなく、動きのスケッチデータのみを視覚化する。
-4.  **全データの時系列記録 (データロギング)**:
-    *   MediaPipeから出力される全データ（478個の3D顔ランドマーク座標、52個の表情ブレンドシェイプスコア、顔変換行列など）をタイムスタンプとともにフレームごとに配列に保存する。
-5.  **データのエクスポート**:
-    *   セッション（趣味の話、仕事の話など）の終了後に、収集した時系列データをJSONまたはCSV形式でローカルにダウンロード保存するボタンを提供する。
+## 3. 実装方針
 
-## 4. AI・開発エージェントへの実装指示 (Step-by-Step)
+### 3.1 表示
+- 主表示は `<video>` によるライブ映像
+- 顔ランドマークのリアルタイム描画は行わない
+- 動画上には必要最低限のオーバーレイのみ表示する
+- UI は 1 画面完結型にする
 
-### Step 1: プロジェクトの初期化とVite設定
-*   React + Viteプロジェクトの基本構成を作成する。
-*   `vite.config.js` を修正し、`build.outDir = 'docs'` を設定する。GitHub Pagesのリポジトリ名に合わせた `base` パスの設定も考慮する。
+### 3.2 解析
+- `getUserMedia()` で取得したカメラ映像を `video` に流す
+- `requestAnimationFrame` ループの中で `faceLandmarker.detectForVideo()` を呼ぶ
+- 解析結果は UI 描画には使わず、状態表示と保存にだけ使う
 
-### Step 2: MediaPipe Face Landmarkerの組み込み
-*   `@mediapipe/tasks-vision` パッケージをインストールする。
-*   WebWorkerとWASMを利用してFace Landmarkerモデル（`face_landmarker.task`）を非同期でロードするカスタムフック (`useFaceLandmarker`) を実装する。
-*   モデルの設定は以下を含めること:
-    *   `outputFaceBlendshapes: true` (表情解析のため必須)
-    *   `outputFacialTransformationMatrixes: true`
+Face Landmarker の設定:
 
-### Step 3: カメラ映像の取得とCanvas描画 (スケッチデータ化)
-*   `getUserMedia` を使ってWebカメラからの映像ストリームを取得するフックを作成する。
-*   `<video>` タグにストリームを流し、`requestAnimationFrame` ループの中で `faceLandmarker.detectForVideo()` を呼び出す。
-*   `<canvas>` タグを用意し、`detectForVideo` の結果（`faceLandmarks`）を元に、`DrawingUtils.drawConnectors` 等を用いて顔のメッシュ線を描画する。元映像はUIに表示せず、Canvasの黒背景に緑や白の線でメッシュだけが浮かび上がるようなUIにする。
+- `runningMode: "VIDEO"`
+- `numFaces: 1`
+- `outputFaceBlendshapes: true`
+- `outputFacialTransformationMatrixes: true`
 
-### Step 4: データのロギングとエクスポート機能
-*   録画（記録）開始・停止ボタンを実装する。
-*   記録中は、各フレームの `timestamp`、`faceLandmarks`、`faceBlendshapes` などの生データを状態（Refなど）に保持する。どのデータが分析に有効になるかわからないため、取得できる要素は間引かずに全て記録する。
-*   記録停止後、「データをダウンロード」ボタンを有効化し、Blob API等を使用して収集した配列データを `session_data_[timestamp].json` のような形式でユーザーにダウンロードさせる。
+### 3.3 保存
+- セッションはテーマ単位で分ける
+- 保存先は `localStorage` ではなく `IndexedDB`
+- フレーム単位の生データは React state ではなく `useRef` に一時保持し、一定件数ごとに IndexedDB に flush する
+- 停止時に残りのバッファを flush してセッションを完了状態にする
 
-### Step 5: UI/UX の構築
-*   研究デモ用として、以下の要素を配置したシンプルな画面を作成する。
-    1.  **インストラクション表示エリア**: 「趣味について話してください」「仕事のストレスについて話してください」などのトピックを表示。
-    2.  **メイン表示エリア**: 顔のスケッチデータがリアルタイムで動くCanvas。
-    3.  **コントロールエリア**: 「記録開始」「記録停止」「JSONデータをダウンロード」ボタン。
+## 4. 記録対象データ
+各フレームで、取得できる情報は間引かず保存すること。
 
-## 5. 留意事項・制約
-*   **パフォーマンス**: 全ランドマークの毎フレーム保存はメモリを消費するため、ReactのStateではなく `useRef` を用いてログデータを蓄積すること。
-*   **セキュリティ**: 画像データは一切外部に送信しない、ローカルのブラウザ内完結型アプリケーションとすること。
-```
+- `timestampMs`
+- `elapsedMs`
+- `hasFace`
+- `faceLandmarks`
+- `faceBlendshapes`
+- `facialTransformationMatrixes`
 
----
+セッション情報には少なくとも以下を含めること。
 
-### アプリケーション設計の背景（ソース資料より）
+- `id`
+- `themeKey`
+- `themeLabel`
+- `startedAt`
+- `endedAt`
+- `frameCount`
+- `status`
 
-*   **データ収集の要件**: ミーティング議事録にある通り、「趣味の話」と「ストレス（仕事）の話」をさせ、その表情変化を検出することが目的です。また、何が有効な指標になるか未知数なため、MediaPipe Face Landmarker が出力する **478個の3次元顔ランドマーク** と **52個のブレンドシェイプスコア** （表情を表す係数）などのデータをすべて収集する設計にしています。
-*   **プライバシーへの配慮**: 顔画像本体ではなくスケッチデータ（描画データ）で収集するという要件に基づき、実際のカメラ映像はブラウザの裏側で処理するのみにとどめ、画面（および保存対象）には MediaPipe の描画ユーティリティ（`DrawingUtils`）を用いたメッシュの線のみを描画・出力するよう指示しています。
-*   **ビルドと共有**: GitHub Pagesの仕様に従い、`/docs` フォルダに静的ファイルを出力するため、Vite の設定変更を Step 1 に明記しました。
+## 5. テーマと UI 要件
+テーマは現状 2 つ固定です。
+
+- `hobby`: あなたの趣味について教えてください
+- `stress`: 現在の仕事の課題やストレスについて教えてください
+
+画面上の公開機能:
+
+- テーマ選択
+- カメラ開始
+- 記録開始
+- 記録停止
+- JSON ダウンロード
+- 履歴一覧
+- 履歴削除
+
+通知として最低限出すもの:
+
+- カメラ権限エラー
+- MediaPipe 初期化失敗
+- 顔未検出
+- IndexedDB 保存失敗
+
+## 6. データ構造
+IndexedDB は少なくとも以下の 2 ストアを持つこと。
+
+### `sessions`
+- `id`
+- `themeKey`
+- `themeLabel`
+- `startedAt`
+- `endedAt`
+- `frameCount`
+- `status`
+
+### `frames`
+- `sessionId`
+- `frameIndex`
+- `timestampMs`
+- `elapsedMs`
+- `hasFace`
+- `faceLandmarks`
+- `faceBlendshapes`
+- `facialTransformationMatrixes`
+
+## 7. エクスポート要件
+- エクスポート形式は現状 JSON のみ
+- 1 セッション 1 ファイル
+- ファイル名は `session_<themeKey>_<startedAt>.json`
+- JSON のトップレベルは `{ session, frames }`
+
+## 8. AI 開発エージェントへの指示
+このリポジトリを変更する AI 開発エージェントは以下を守ること。
+
+- ライブ映像表示を勝手にメッシュ描画へ戻さない
+- 映像ファイルや画像を保存対象に追加しない
+- Face Landmarker の出力データは削らず、研究用途として生データを保持する
+- 長時間記録を考慮し、フレーム配列を React state に積まない
+- 既存の GitHub Pages 配信前提を壊さない
+- 変更後は `npm run build` を通し、`docs/` 出力が維持されることを確認する
+
+## 9. 非機能要件
+- 外部サーバー送信は行わない
+- HTTPS の GitHub Pages またはローカル開発サーバーで動作すること
+- 体験を損ねる点滅や過剰な描画負荷を避けること
+- モバイル幅でも操作不能にならないこと
