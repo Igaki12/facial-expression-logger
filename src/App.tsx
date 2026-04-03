@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  DrawingUtils,
-  FaceLandmarker,
-  type Classifications,
-  type FaceLandmarkerResult,
-} from "@mediapipe/tasks-vision";
+import { type Classifications } from "@mediapipe/tasks-vision";
 import { THEMES, FLUSH_BATCH_SIZE } from "./constants";
 import { useFaceLandmarker } from "./hooks/useFaceLandmarker";
 import { useUserMedia } from "./hooks/useUserMedia";
@@ -35,67 +30,6 @@ function classificationsToCategories(
   return classifications?.map((item) => item.categories) ?? [];
 }
 
-function syncCanvasDimensions(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
-  const width = video.videoWidth || 960;
-  const height = video.videoHeight || 720;
-
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-}
-
-function paintBackground(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#010203";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-function drawFaceMesh(
-  context: CanvasRenderingContext2D,
-  results: FaceLandmarkerResult,
-) {
-  const drawingUtils = new DrawingUtils(context);
-
-  for (const landmarks of results.faceLandmarks) {
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_TESSELATION,
-      { color: "#4fffb0", lineWidth: 1 },
-    );
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
-      { color: "#f4fff9", lineWidth: 1.5 },
-    );
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-      { color: "#f4fff9", lineWidth: 1.5 },
-    );
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-      { color: "#f4fff9", lineWidth: 1.5 },
-    );
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW,
-      { color: "#9efccf", lineWidth: 1.5 },
-    );
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW,
-      { color: "#9efccf", lineWidth: 1.5 },
-    );
-    drawingUtils.drawConnectors(
-      landmarks,
-      FaceLandmarker.FACE_LANDMARKS_LIPS,
-      { color: "#d7fff0", lineWidth: 1.5 },
-    );
-  }
-}
-
 function formatDateTime(value: string | null): string {
   if (!value) {
     return "未完了";
@@ -109,7 +43,6 @@ function formatDateTime(value: string | null): string {
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const activeSessionRef = useRef<ActiveSessionState | null>(null);
@@ -168,6 +101,11 @@ export default function App() {
     });
   }, [stream]);
 
+  useEffect(() => {
+    lastVideoTimeRef.current = -1;
+    setFaceVisible(false);
+  }, [stream]);
+
   const flushBufferedFrames = useCallback(
     (force = false) => {
       if (pendingFramesRef.current.length === 0) {
@@ -202,14 +140,7 @@ export default function App() {
 
   useEffect(() => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video || !canvas || !faceLandmarker || !stream) {
-      return;
-    }
-
-    const context = canvas.getContext("2d");
-    if (!context) {
+    if (!video || !faceLandmarker || !stream) {
       return;
     }
 
@@ -220,17 +151,10 @@ export default function App() {
         return;
       }
 
-      syncCanvasDimensions(video, canvas);
-      paintBackground(context, canvas);
-
       if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         if (video.currentTime !== lastVideoTimeRef.current) {
           const results = faceLandmarker.detectForVideo(video, performance.now());
           const hasFace = results.faceLandmarks.length > 0;
-          if (hasFace) {
-            drawFaceMesh(context, results);
-          }
-
           setFaceVisible((current) => (current === hasFace ? current : hasFace));
 
           const activeSession = activeSessionRef.current;
@@ -418,7 +342,7 @@ export default function App() {
           <p className="eyebrow">Research Demo</p>
           <h1>表情変化・ストレス検出デモ</h1>
           <p className="lead">
-            Web カメラ映像は保存せず、MediaPipe の顔ランドマークだけを描画・記録します。
+            画面にはライブ映像を表示しつつ、裏側で MediaPipe の顔特徴量だけを解析・記録します。
           </p>
         </div>
 
@@ -454,11 +378,11 @@ export default function App() {
             </span>
           </div>
 
-          <div className="canvas-frame">
-            <canvas ref={canvasRef} className="mesh-canvas" />
-            <video ref={videoRef} className="hidden-video" playsInline muted />
-            <div className="canvas-overlay">
+          <div className="video-frame">
+            <video ref={videoRef} className="camera-video" playsInline muted />
+            <div className="video-overlay">
               <p>{selectedTheme.description}</p>
+              <p>映像ファイルは保存せず、ランドマークやブレンドシェイプなどの数値データだけを保持します。</p>
             </div>
           </div>
 
@@ -526,7 +450,11 @@ export default function App() {
                   ? `MediaPipe モデル初期化失敗: ${landmarkerError}`
                   : "MediaPipe 初期化エラーはありません。"}
               </li>
-              <li>{faceVisible ? "顔を検出しています。" : "顔未検出です。画角を調整してください。"}</li>
+              <li>
+                {faceVisible
+                  ? "顔を検出しています。ライブ映像は表示のみで保存しません。"
+                  : "顔未検出です。画角と明るさを調整してください。"}
+              </li>
               <li>
                 {storageError
                   ? `IndexedDB 保存失敗: ${storageError}`
