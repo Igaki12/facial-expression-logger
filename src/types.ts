@@ -2,25 +2,47 @@ import type { Category, Matrix, NormalizedLandmark } from "@mediapipe/tasks-visi
 
 export type ThemeKey = "hobby" | "stress";
 
-export interface ThemeOption {
+export type FlowMode = "guided" | "retake";
+
+export interface ThemeContent {
   key: ThemeKey;
   label: string;
-  prompt: string;
-  description: string;
+  shortLabel: string;
+  introTitle: string;
+  introLead: string;
+  recordingTitle: string;
+  recordingLead: string;
+  rotatingPrompts: string[];
+  examplePills: string[];
+  supportiveHint: string;
+  promptSetVersion: string;
 }
 
-export interface SessionRecord {
+export interface ExperimentRecord {
   id: string;
-  themeKey: ThemeKey;
-  themeLabel: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: "recording" | "completed" | "aborted";
+  flowMode: FlowMode;
+  phaseOrder: ThemeKey[];
+  completedPhases: ThemeKey[];
+  sourceExperimentId?: string;
+  retakeOfPhase?: ThemeKey;
+}
+
+export interface PhaseRecord {
+  experimentId: string;
+  phaseKey: ThemeKey;
+  label: string;
   startedAt: string;
   endedAt: string | null;
   frameCount: number;
-  status: "recording" | "completed";
+  promptSetVersion: string;
 }
 
 export interface FrameRecord {
-  sessionId: string;
+  experimentId: string;
+  phaseKey: ThemeKey;
   frameIndex: number;
   timestampMs: number;
   elapsedMs: number;
@@ -30,7 +52,8 @@ export interface FrameRecord {
   facialTransformationMatrixes: Matrix[];
 }
 
-export interface SessionExport {
-  session: SessionRecord;
+export interface ExperimentExport {
+  experiment: ExperimentRecord;
+  phases: PhaseRecord[];
   frames: FrameRecord[];
 }

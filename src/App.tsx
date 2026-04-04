@@ -1,27 +1,62 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Classifications } from "@mediapipe/tasks-vision";
-import { THEMES, FLUSH_BATCH_SIZE } from "./constants";
+import {
+  FLUSH_BATCH_SIZE,
+  GUIDE_ROTATION_MS,
+  PHASE_CONTENT,
+  PHASE_ORDER,
+  RESEARCH_DEBRIEF,
+} from "./constants";
 import { useFaceLandmarker } from "./hooks/useFaceLandmarker";
 import { useUserMedia } from "./hooks/useUserMedia";
-import { downloadSessionExport } from "./lib/export";
+import { downloadExperimentExport } from "./lib/export";
 import {
   appendFrames,
-  completeSession,
-  createSession,
-  deleteSession,
-  getFramesForSession,
-  getSession,
-  listSessions,
+  completeExperiment,
+  completePhase,
+  createExperiment,
+  createPhase,
+  deleteExperiment,
+  getExperimentExport,
+  listExperiments,
+  updateExperimentCompletedPhases,
 } from "./lib/storage";
-import type { FrameRecord, SessionRecord, ThemeKey } from "./types";
+import type {
+  ExperimentRecord,
+  FlowMode,
+  FrameRecord,
+  PhaseRecord,
+  ThemeKey,
+} from "./types";
 
-interface ActiveSessionState {
+type Screen =
+  | "intro"
+  | "camera_check"
+  | "phase_guide"
+  | "phase_recording"
+  | "work_transition"
+  | "completion"
+  | "debrief"
+  | "history";
+
+interface FlowState {
+  mode: FlowMode;
+  experimentId: string | null;
+  startedAt: string | null;
+  phaseOrder: ThemeKey[];
+  currentPhaseIndex: number;
+  completedPhases: ThemeKey[];
+  sourceExperimentId?: string;
+  retakeOfPhase?: ThemeKey;
+}
+
+interface ActiveRecordingState {
+  experimentId: string;
   frameCount: number;
-  id: string;
+  phaseKey: ThemeKey;
+  promptSetVersion: string;
   startedAt: string;
   startedAtMs: number;
-  themeKey: ThemeKey;
-  themeLabel: string;
 }
 
 function classificationsToCategories(
@@ -32,30 +67,48 @@ function classificationsToCategories(
 
 function formatDateTime(value: string | null): string {
   if (!value) {
-    return "未完了";
+    return "進行中";
   }
 
   return new Intl.DateTimeFormat("ja-JP", {
     dateStyle: "short",
-    timeStyle: "medium",
+    timeStyle: "short",
   }).format(new Date(value));
+}
+
+function uniqThemeKeys(values: ThemeKey[]): ThemeKey[] {
+  return [...new Set(values)];
+}
+
+function describeExperiment(experiment: ExperimentRecord): string {
+  if (experiment.flowMode === "retake" && experiment.retakeOfPhase) {
+    return `${PHASE_CONTENT[experiment.retakeOfPhase].label}の撮り直し`;
+  }
+
+  return "通常フロー";
 }
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
-  const activeSessionRef = useRef<ActiveSessionState | null>(null);
   const pendingFramesRef = useRef<FrameRecord[]>([]);
   const flushPromiseRef = useRef<Promise<void>>(Promise.resolve());
-  const [selectedThemeKey, setSelectedThemeKey] = useState<ThemeKey>("hobby");
-  const [sessions, setSessions] = useState<SessionRecord[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [latestCompletedId, setLatestCompletedId] = useState<string | null>(null);
+  const flowRef = useRef<FlowState | null>(null);
+  const activeRecordingRef = useRef<ActiveRecordingState | null>(null);
+  const phaseStartPendingRef = useRef(false);
+  const phaseStopPendingRef = useRef(false);
+  const [screen, setScreen] = useState<Screen>("intro");
+  const [flow, setFlow] = useState<FlowState | null>(null);
+  const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
+  const [historyReturnScreen, setHistoryReturnScreen] = useState<Screen>("intro");
+  const [lastCompletedExperimentId, setLastCompletedExperimentId] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [faceVisible, setFaceVisible] = useState(false);
+  const [guideIndex, setGuideIndex] = useState(0);
 
   const { stream, status: cameraStatus, error: cameraError, startCamera } = useUserMedia();
   const {
@@ -65,29 +118,34 @@ export default function App() {
     initialize,
   } = useFaceLandmarker();
 
-  const selectedTheme = useMemo(
-    () => THEMES.find((theme) => theme.key === selectedThemeKey) ?? THEMES[0],
-    [selectedThemeKey],
-  );
+  useEffect(() => {
+    flowRef.current = flow;
+  }, [flow]);
 
-  const refreshSessions = useCallback(async () => {
+  const currentPhaseKey = flow ? flow.phaseOrder[flow.currentPhaseIndex] ?? null : null;
+  const currentTheme = currentPhaseKey ? PHASE_CONTENT[currentPhaseKey] : null;
+  const rotatingPrompt = currentTheme
+    ? currentTheme.rotatingPrompts[guideIndex % currentTheme.rotatingPrompts.length]
+    : "";
+
+  const refreshExperiments = useCallback(async () => {
     try {
-      const nextSessions = await listSessions();
-      setSessions(nextSessions);
-      const latestCompleted = nextSessions.find((session) => session.status === "completed");
-      setLatestCompletedId(latestCompleted?.id ?? null);
+      const nextExperiments = await listExperiments();
+      setExperiments(nextExperiments);
+      const latestCompleted = nextExperiments.find((experiment) => experiment.status === "completed");
+      setLastCompletedExperimentId(latestCompleted?.id ?? null);
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "保存済みセッションの読み込みに失敗しました。";
+          : "保存済みデータの読み込みに失敗しました。";
       setStorageError(message);
     }
   }, []);
 
   useEffect(() => {
-    void refreshSessions();
-  }, [refreshSessions]);
+    void refreshExperiments();
+  }, [refreshExperiments]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -99,12 +157,34 @@ export default function App() {
     void video.play().catch(() => {
       setStorageError("カメラ映像の再生開始に失敗しました。");
     });
-  }, [stream]);
+  }, [screen, stream]);
 
   useEffect(() => {
     lastVideoTimeRef.current = -1;
     setFaceVisible(false);
   }, [stream]);
+
+  useEffect(() => {
+    setGuideIndex(0);
+  }, [screen, currentPhaseKey]);
+
+  useEffect(() => {
+    if (
+      screen !== "phase_guide" &&
+      screen !== "phase_recording" &&
+      screen !== "work_transition"
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setGuideIndex((current) => current + 1);
+    }, GUIDE_ROTATION_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [screen]);
 
   const flushBufferedFrames = useCallback(
     (force = false) => {
@@ -128,7 +208,7 @@ export default function App() {
           const message =
             caughtError instanceof Error
               ? caughtError.message
-              : "IndexedDB へのフレーム保存に失敗しました。";
+              : "フレーム保存に失敗しました。";
           setStorageError(message);
         }
       });
@@ -157,21 +237,22 @@ export default function App() {
           const hasFace = results.faceLandmarks.length > 0;
           setFaceVisible((current) => (current === hasFace ? current : hasFace));
 
-          const activeSession = activeSessionRef.current;
-          if (activeSession) {
+          const activeRecording = activeRecordingRef.current;
+          if (activeRecording) {
             const timestampMs = Date.now();
             const frameRecord: FrameRecord = {
-              sessionId: activeSession.id,
-              frameIndex: activeSession.frameCount,
+              experimentId: activeRecording.experimentId,
+              phaseKey: activeRecording.phaseKey,
+              frameIndex: activeRecording.frameCount,
               timestampMs,
-              elapsedMs: timestampMs - activeSession.startedAtMs,
+              elapsedMs: timestampMs - activeRecording.startedAtMs,
               hasFace,
               faceLandmarks: results.faceLandmarks,
               faceBlendshapes: classificationsToCategories(results.faceBlendshapes),
               facialTransformationMatrixes: results.facialTransformationMatrixes ?? [],
             };
 
-            activeSession.frameCount += 1;
+            activeRecording.frameCount += 1;
             pendingFramesRef.current.push(frameRecord);
             void flushBufferedFrames(false);
           }
@@ -192,107 +273,236 @@ export default function App() {
         animationFrameRef.current = null;
       }
     };
-  }, [faceLandmarker, flushBufferedFrames, stream]);
+  }, [faceLandmarker, flushBufferedFrames, screen, stream]);
 
-  const handleStartCamera = useCallback(async () => {
+  const beginFlow = useCallback(
+    (mode: FlowMode, phaseOrder: ThemeKey[], options?: { sourceExperimentId?: string; retakeOfPhase?: ThemeKey }) => {
+      setStorageError(null);
+      setDownloadError(null);
+      setFlow({
+        mode,
+        experimentId: null,
+        startedAt: null,
+        phaseOrder,
+        currentPhaseIndex: 0,
+        completedPhases: [],
+        sourceExperimentId: options?.sourceExperimentId,
+        retakeOfPhase: options?.retakeOfPhase,
+      });
+      setScreen("camera_check");
+    },
+    [],
+  );
+
+  const handleStartGuidedFlow = useCallback(() => {
+    beginFlow("guided", PHASE_ORDER);
+  }, [beginFlow]);
+
+  const handleStartRetakeFlow = useCallback(
+    (phaseKey: ThemeKey) => {
+      beginFlow("retake", [phaseKey], {
+        sourceExperimentId: lastCompletedExperimentId ?? undefined,
+        retakeOfPhase: phaseKey,
+      });
+    },
+    [beginFlow, lastCompletedExperimentId],
+  );
+
+  const handlePrepareCamera = useCallback(async () => {
     setStorageError(null);
 
     try {
       await initialize();
       await startCamera();
     } catch {
-      // Errors are surfaced through hook state.
+      // Hook state surfaces the error text.
     }
   }, [initialize, startCamera]);
 
-  const handleStartRecording = useCallback(async () => {
-    if (!faceLandmarker || !stream) {
-      setStorageError("先にカメラを開始し、MediaPipe の準備を完了してください。");
+  const handleContinueFromCamera = useCallback(() => {
+    if (cameraStatus !== "ready" || landmarkerStatus !== "ready") {
+      setStorageError("カメラの準備が整ってから次へ進んでください。");
       return;
     }
 
+    setScreen("phase_guide");
+  }, [cameraStatus, landmarkerStatus]);
+
+  const ensurePhaseRecordingStarted = useCallback(async () => {
+    const currentFlow = flowRef.current;
+    if (
+      !currentFlow ||
+      !currentPhaseKey ||
+      !faceLandmarker ||
+      !stream ||
+      phaseStartPendingRef.current ||
+      activeRecordingRef.current
+    ) {
+      return;
+    }
+
+    phaseStartPendingRef.current = true;
     setIsBusy(true);
     setStorageError(null);
 
     try {
-      const startedAt = new Date().toISOString();
-      const nextSession: SessionRecord = {
-        id: crypto.randomUUID(),
-        themeKey: selectedTheme.key,
-        themeLabel: selectedTheme.label,
-        startedAt,
+      const theme = PHASE_CONTENT[currentPhaseKey];
+      let experimentId = currentFlow.experimentId;
+      let startedAt = currentFlow.startedAt;
+
+      if (!experimentId || !startedAt) {
+        const experiment: ExperimentRecord = {
+          id: crypto.randomUUID(),
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          status: "recording",
+          flowMode: currentFlow.mode,
+          phaseOrder: currentFlow.phaseOrder,
+          completedPhases: currentFlow.completedPhases,
+          sourceExperimentId: currentFlow.sourceExperimentId,
+          retakeOfPhase: currentFlow.retakeOfPhase,
+        };
+        await createExperiment(experiment);
+        experimentId = experiment.id;
+        startedAt = experiment.startedAt;
+        setFlow((previous) =>
+          previous
+            ? {
+                ...previous,
+                experimentId,
+                startedAt,
+              }
+            : previous,
+        );
+      }
+
+      const phase: PhaseRecord = {
+        experimentId,
+        phaseKey: currentPhaseKey,
+        label: theme.label,
+        startedAt: new Date().toISOString(),
         endedAt: null,
         frameCount: 0,
-        status: "recording",
+        promptSetVersion: theme.promptSetVersion,
       };
 
-      await createSession(nextSession);
-      activeSessionRef.current = {
-        frameCount: 0,
-        id: nextSession.id,
-        startedAt,
-        startedAtMs: Date.now(),
-        themeKey: nextSession.themeKey,
-        themeLabel: nextSession.themeLabel,
-      };
+      await createPhase(phase);
       pendingFramesRef.current = [];
       flushPromiseRef.current = Promise.resolve();
+      activeRecordingRef.current = {
+        experimentId,
+        frameCount: 0,
+        phaseKey: currentPhaseKey,
+        promptSetVersion: theme.promptSetVersion,
+        startedAt: phase.startedAt,
+        startedAtMs: Date.now(),
+      };
       setIsRecording(true);
-      await refreshSessions();
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "セッション開始の保存に失敗しました。";
+          : "フェーズ開始に失敗しました。";
       setStorageError(message);
     } finally {
+      phaseStartPendingRef.current = false;
       setIsBusy(false);
     }
-  }, [faceLandmarker, refreshSessions, selectedTheme, stream]);
+  }, [currentPhaseKey, faceLandmarker, stream]);
 
-  const handleStopRecording = useCallback(async () => {
-    const activeSession = activeSessionRef.current;
-    if (!activeSession) {
+  useEffect(() => {
+    if (screen !== "phase_recording") {
       return;
     }
 
+    void ensurePhaseRecordingStarted();
+  }, [ensurePhaseRecordingStarted, screen]);
+
+  const finishCurrentPhase = useCallback(async () => {
+    const currentFlow = flowRef.current;
+    const activeRecording = activeRecordingRef.current;
+    if (!currentFlow || !activeRecording || phaseStopPendingRef.current) {
+      return;
+    }
+
+    phaseStopPendingRef.current = true;
     setIsBusy(true);
     setStorageError(null);
 
     try {
-      activeSessionRef.current = null;
+      const phaseEndedAt = new Date().toISOString();
+      activeRecordingRef.current = null;
       setIsRecording(false);
+
       await flushBufferedFrames(true);
       await flushPromiseRef.current;
-      await completeSession(
-        activeSession.id,
-        new Date().toISOString(),
-        activeSession.frameCount,
+      await completePhase(
+        activeRecording.experimentId,
+        activeRecording.phaseKey,
+        phaseEndedAt,
+        activeRecording.frameCount,
       );
-      await refreshSessions();
+
+      const completedPhases = uniqThemeKeys([
+        ...currentFlow.completedPhases,
+        activeRecording.phaseKey,
+      ]);
+
+      await updateExperimentCompletedPhases(activeRecording.experimentId, completedPhases);
+
+      const isLastPhase = currentFlow.currentPhaseIndex >= currentFlow.phaseOrder.length - 1;
+      if (isLastPhase) {
+        await completeExperiment(
+          activeRecording.experimentId,
+          new Date().toISOString(),
+          completedPhases,
+          "completed",
+        );
+        setFlow((previous) =>
+          previous
+            ? {
+                ...previous,
+                experimentId: activeRecording.experimentId,
+                completedPhases,
+              }
+            : previous,
+        );
+        setLastCompletedExperimentId(activeRecording.experimentId);
+        await refreshExperiments();
+        setScreen("completion");
+        return;
+      }
+
+      setFlow((previous) =>
+        previous
+          ? {
+              ...previous,
+              experimentId: activeRecording.experimentId,
+              completedPhases,
+              currentPhaseIndex: previous.currentPhaseIndex + 1,
+            }
+          : previous,
+      );
+      setScreen("work_transition");
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "セッション終了処理に失敗しました。";
+          : "フェーズ終了処理に失敗しました。";
       setStorageError(message);
     } finally {
       pendingFramesRef.current = [];
+      phaseStopPendingRef.current = false;
       setIsBusy(false);
     }
-  }, [flushBufferedFrames, refreshSessions]);
+  }, [flushBufferedFrames, refreshExperiments]);
 
-  const handleDownloadSession = useCallback(async (sessionId: string) => {
+  const handleDownloadExperiment = useCallback(async (experimentId: string) => {
     setDownloadError(null);
 
     try {
-      const session = await getSession(sessionId);
-      if (!session) {
-        throw new Error("ダウンロード対象のセッションが見つかりません。");
-      }
-
-      const frames = await getFramesForSession(sessionId);
-      downloadSessionExport(session, frames);
+      const experimentExport = await getExperimentExport(experimentId);
+      downloadExperimentExport(experimentExport);
     } catch (caughtError) {
       const message =
         caughtError instanceof Error
@@ -302,9 +512,9 @@ export default function App() {
     }
   }, []);
 
-  const handleDeleteSession = useCallback(
-    async (sessionId: string) => {
-      if (!window.confirm("このセッション履歴を削除しますか？")) {
+  const handleDeleteExperiment = useCallback(
+    async (experimentId: string) => {
+      if (!window.confirm("この実験データを削除しますか？")) {
         return;
       }
 
@@ -312,200 +522,404 @@ export default function App() {
       setIsBusy(true);
 
       try {
-        await deleteSession(sessionId);
-        await refreshSessions();
+        await deleteExperiment(experimentId);
+        await refreshExperiments();
       } catch (caughtError) {
         const message =
           caughtError instanceof Error
             ? caughtError.message
-            : "セッション削除に失敗しました。";
+            : "実験データの削除に失敗しました。";
         setStorageError(message);
       } finally {
         setIsBusy(false);
       }
     },
-    [refreshSessions],
+    [refreshExperiments],
   );
 
-  const canStartRecording =
-    cameraStatus === "ready" &&
-    landmarkerStatus === "ready" &&
-    !isRecording &&
-    !isBusy;
+  const openHistory = useCallback((returnScreen: Screen) => {
+    setHistoryReturnScreen(returnScreen);
+    setScreen("history");
+  }, []);
 
-  const canStopRecording = isRecording && !isBusy;
+  const returnFromHistory = useCallback(() => {
+    setScreen(historyReturnScreen);
+  }, [historyReturnScreen]);
+
+  const progressItems = useMemo(
+    () => [
+      { label: "準備", active: screen === "intro" || screen === "camera_check" },
+      {
+        label: "1",
+        active:
+          currentPhaseKey === "hobby" &&
+          (screen === "phase_guide" || screen === "phase_recording" || screen === "work_transition"),
+      },
+      {
+        label: "2",
+        active:
+          currentPhaseKey === "stress" &&
+          (screen === "phase_guide" || screen === "phase_recording" || screen === "completion" || screen === "debrief"),
+      },
+      { label: "完了", active: screen === "completion" || screen === "debrief" || screen === "history" },
+    ],
+    [currentPhaseKey, screen],
+  );
+
+  const phaseActionLabel = useMemo(() => {
+    if (!flow || !currentPhaseKey) {
+      return "完了";
+    }
+
+    if (flow.mode === "retake") {
+      return `${PHASE_CONTENT[currentPhaseKey].label}の撮り直しを完了`;
+    }
+
+    if (currentPhaseKey === "hobby") {
+      return "つぎは仕事の案内へ";
+    }
+
+    return "この実験を完了する";
+  }, [currentPhaseKey, flow]);
+
+  const condensedError =
+    storageError ??
+    cameraError ??
+    landmarkerError ??
+    downloadError;
 
   return (
-    <main className="app-shell">
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Research Demo</p>
-          <h1>表情変化・ストレス検出デモ</h1>
-          <p className="lead">
-            画面にはライブ映像を表示しつつ、裏側で MediaPipe の顔特徴量だけを解析・記録します。
-          </p>
-        </div>
+    <main className="story-shell">
+      <div className="aurora aurora-one" />
+      <div className="aurora aurora-two" />
 
-        <div className="topic-picker" role="radiogroup" aria-label="計測テーマ">
-          {THEMES.map((theme) => {
-            const isActive = selectedThemeKey === theme.key;
-            return (
-              <button
-                key={theme.key}
-                type="button"
-                className={`topic-card${isActive ? " is-active" : ""}`}
-                onClick={() => setSelectedThemeKey(theme.key)}
-                disabled={isRecording}
-              >
-                <span className="topic-label">{theme.label}</span>
-                <strong>{theme.prompt}</strong>
-                <span>{theme.description}</span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      <section className="story-panel">
+        <header className="story-header">
+          <div>
+            <p className="eyebrow">Guided Session</p>
+            <h1>案内に沿って、短い会話を進めてください</h1>
+          </div>
+          <button
+            type="button"
+            className="text-link"
+            onClick={() => openHistory(screen)}
+          >
+            保存済みデータ
+          </button>
+        </header>
 
-      <section className="workspace-grid">
-        <div className="viewer-panel">
-          <div className="viewer-header">
-            <div>
-              <p className="section-kicker">現在のテーマ</p>
-              <h2>{selectedTheme.prompt}</h2>
-            </div>
-            <span className={`status-pill${faceVisible ? " ok" : " warn"}`}>
-              {faceVisible ? "顔を検出中" : "顔が未検出"}
+        <div className="progress-strip" aria-label="進行状況">
+          {progressItems.map((item) => (
+            <span
+              key={item.label}
+              className={`progress-pill${item.active ? " is-active" : ""}`}
+            >
+              {item.label}
             </span>
-          </div>
-
-          <div className="video-frame">
-            <video ref={videoRef} className="camera-video" playsInline muted />
-            <div className="video-overlay">
-              <p>{selectedTheme.description}</p>
-              <p>映像ファイルは保存せず、ランドマークやブレンドシェイプなどの数値データだけを保持します。</p>
-            </div>
-          </div>
-
-          <div className="control-panel">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={handleStartCamera}
-              disabled={cameraStatus === "ready" || landmarkerStatus === "loading" || isBusy}
-            >
-              {cameraStatus === "ready" ? "カメラ準備完了" : "カメラ開始"}
-            </button>
-            <button
-              type="button"
-              className="primary-button secondary"
-              onClick={handleStartRecording}
-              disabled={!canStartRecording}
-            >
-              記録開始
-            </button>
-            <button
-              type="button"
-              className="primary-button danger"
-              onClick={handleStopRecording}
-              disabled={!canStopRecording}
-            >
-              記録停止
-            </button>
-            <button
-              type="button"
-              className="primary-button ghost"
-              onClick={() => latestCompletedId && void handleDownloadSession(latestCompletedId)}
-              disabled={!latestCompletedId || isBusy}
-            >
-              JSON ダウンロード
-            </button>
-          </div>
+          ))}
         </div>
 
-        <aside className="side-panel">
-          <div className="status-card">
-            <h3>システム状態</h3>
-            <dl className="status-list">
-              <div>
-                <dt>カメラ</dt>
-                <dd>{cameraStatus}</dd>
-              </div>
-              <div>
-                <dt>MediaPipe</dt>
-                <dd>{landmarkerStatus}</dd>
-              </div>
-              <div>
-                <dt>記録中</dt>
-                <dd>{isRecording ? "はい" : "いいえ"}</dd>
-              </div>
-            </dl>
+        {condensedError ? (
+          <div className="notice-banner" role="alert">
+            {condensedError}
           </div>
+        ) : null}
 
-          <div className="status-card">
-            <h3>通知</h3>
-            <ul className="message-list">
-              <li>{cameraError ? `カメラ権限拒否: ${cameraError}` : "カメラ権限は未エラーです。"}</li>
-              <li>
-                {landmarkerError
-                  ? `MediaPipe モデル初期化失敗: ${landmarkerError}`
-                  : "MediaPipe 初期化エラーはありません。"}
-              </li>
-              <li>
-                {faceVisible
-                  ? "顔を検出しています。ライブ映像は表示のみで保存しません。"
-                  : "顔未検出です。画角と明るさを調整してください。"}
-              </li>
-              <li>
-                {storageError
-                  ? `IndexedDB 保存失敗: ${storageError}`
-                  : "IndexedDB 保存エラーはありません。"}
-              </li>
-              {downloadError ? <li>ダウンロード失敗: {downloadError}</li> : null}
-            </ul>
-          </div>
-
-          <div className="history-card">
-            <div className="history-header">
-              <h3>履歴一覧</h3>
-              <span>{sessions.length}件</span>
+        {screen === "intro" ? (
+          <section className="scene-card intro-scene">
+            <p className="scene-kicker">はじめる前に</p>
+            <h2>これから短い案内に沿って、2 つの話題を順番に話してもらいます。</h2>
+            <p className="scene-copy">
+              難しく考えなくて大丈夫です。各画面のヒントに合わせて、思いつくことをそのまま話してください。
+            </p>
+            <div className="intro-copy-cloud">
+              <span>話しやすいことからで大丈夫</span>
+              <span>うまくまとめなくて大丈夫</span>
+              <span>途中で言い直しても大丈夫</span>
             </div>
-            <div className="history-list">
-              {sessions.length === 0 ? (
-                <p className="empty-history">保存済みセッションはまだありません。</p>
-              ) : (
-                sessions.map((session) => (
-                  <article key={session.id} className="history-item">
-                    <div className="history-item-body">
-                      <strong>{session.themeLabel}</strong>
-                      <span>開始: {formatDateTime(session.startedAt)}</span>
-                      <span>終了: {formatDateTime(session.endedAt)}</span>
-                      <span>フレーム数: {session.frameCount}</span>
-                      <span>状態: {session.status}</span>
+            <div className="action-row">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={handleStartGuidedFlow}
+              >
+                実験を始める
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "camera_check" ? (
+          <section className="scene-card">
+            <p className="scene-kicker">準備</p>
+            <h2>まずはカメラの位置を整えましょう。</h2>
+            <p className="scene-copy">
+              顔が画面の中央付近に入るようにして、明るさがわかる位置で構えてください。
+            </p>
+
+            <div className="video-stage">
+              <video ref={videoRef} className="camera-video" playsInline muted />
+              <div className="stage-overlay">
+                <p>{faceVisible ? "顔が見えています。このままで大丈夫です。" : "顔が見える位置に少しだけ調整してください。"}</p>
+              </div>
+            </div>
+
+            <div className="action-row stacked-on-mobile">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={handlePrepareCamera}
+                disabled={cameraStatus === "ready" || landmarkerStatus === "loading" || isBusy}
+              >
+                {cameraStatus === "ready" ? "カメラ準備完了" : "カメラを許可する"}
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={handleContinueFromCamera}
+                disabled={cameraStatus !== "ready" || landmarkerStatus !== "ready" || isBusy}
+              >
+                このまま次へ
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "phase_guide" && currentTheme ? (
+          <section className="scene-card">
+            <p className="scene-kicker">場面 {currentTheme.shortLabel}</p>
+            <h2>{currentTheme.introTitle}</h2>
+            <p className="scene-copy">{currentTheme.introLead}</p>
+
+            <div className="video-stage">
+              <video ref={videoRef} className="camera-video" playsInline muted />
+              <div className="stage-overlay">
+                <p>{faceVisible ? "表情が見える位置です。このまま話し始められます。" : "顔が少し見える位置に整えてから始めてください。"}</p>
+              </div>
+            </div>
+
+            <div className="prompt-card">
+              <p className="prompt-label">話し始めるきっかけ</p>
+              <strong>{rotatingPrompt}</strong>
+            </div>
+
+            <div className="pill-row">
+              {currentTheme.examplePills.map((example) => (
+                <span key={example} className="example-pill">
+                  {example}
+                </span>
+              ))}
+            </div>
+
+            <p className="support-copy">{currentTheme.supportiveHint}</p>
+
+            <div className="action-row">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => setScreen("phase_recording")}
+                disabled={cameraStatus !== "ready" || landmarkerStatus !== "ready" || isBusy}
+              >
+                この案内で話し始める
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "phase_recording" && currentTheme ? (
+          <section className="scene-card">
+            <p className="scene-kicker">進行中</p>
+            <h2>{currentTheme.recordingTitle}</h2>
+            <p className="scene-copy">{currentTheme.recordingLead}</p>
+
+            <div className="video-stage large-stage">
+              <video ref={videoRef} className="camera-video" playsInline muted />
+              <div className="stage-overlay">
+                <p>{faceVisible ? "そのまま自然に話してください。" : "顔が見える位置に戻すと、記録が安定しやすくなります。"}</p>
+              </div>
+            </div>
+
+            <div className="prompt-card animated-card">
+              <p className="prompt-label">今のヒント</p>
+              <strong>{rotatingPrompt}</strong>
+            </div>
+
+            <div className="recording-badge-row">
+              <span className={`signal-badge${isRecording ? " is-live" : ""}`}>
+                {isRecording ? "記録中" : "準備中"}
+              </span>
+              <span className={`signal-badge${faceVisible ? " is-good" : ""}`}>
+                {faceVisible ? "顔を確認" : "位置を調整"}
+              </span>
+            </div>
+
+            <div className="action-row">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => void finishCurrentPhase()}
+                disabled={!isRecording || isBusy}
+              >
+                {phaseActionLabel}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "work_transition" ? (
+          <section className="scene-card transition-scene">
+            <p className="scene-kicker">切り替え</p>
+            <h2>ありがとうございます。つぎは仕事の話へ移ります。</h2>
+            <p className="scene-copy">
+              今度は、ふだんの仕事の流れや一日の過ごし方を思い浮かべながら進めてください。
+            </p>
+            <div className="prompt-card">
+              <p className="prompt-label">次の話題の例</p>
+              <strong>
+                一日のスケジュール、最近よくあるやり取り、忙しい時間帯、印象に残った業務など。
+              </strong>
+            </div>
+            <div className="action-row">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => setScreen("phase_guide")}
+              >
+                次の案内へ
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "completion" ? (
+          <section className="scene-card completion-scene">
+            <p className="scene-kicker">完了</p>
+            <h2>ここまでで実験は完了です。ありがとうございました。</h2>
+            <p className="scene-copy">
+              最後に、この取り組みで何を見ていたかを短く説明します。
+            </p>
+            <div className="action-row stacked-on-mobile">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => setScreen("debrief")}
+              >
+                最後の説明を見る
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => openHistory("completion")}
+              >
+                データを見る
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "debrief" ? (
+          <section className="scene-card debrief-scene">
+            <p className="scene-kicker">実験の説明</p>
+            <h2>{RESEARCH_DEBRIEF.title}</h2>
+            <p className="scene-copy">{RESEARCH_DEBRIEF.body}</p>
+            <p className="support-copy">{RESEARCH_DEBRIEF.detail}</p>
+
+            <div className="debrief-grid">
+              <div className="debrief-item">
+                <span>保存しているもの</span>
+                <strong>表情の数値データ</strong>
+              </div>
+              <div className="debrief-item">
+                <span>保存しないもの</span>
+                <strong>映像ファイルそのもの</strong>
+              </div>
+            </div>
+
+            <div className="action-column">
+              <button
+                type="button"
+                className="primary-action"
+                onClick={() => openHistory("debrief")}
+              >
+                データを見る / ダウンロードする
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => handleStartRetakeFlow("hobby")}
+              >
+                趣味を撮り直す
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => handleStartRetakeFlow("stress")}
+              >
+                仕事を撮り直す
+              </button>
+              <button
+                type="button"
+                className="text-link align-left"
+                onClick={() => setScreen("intro")}
+              >
+                最初の画面に戻る
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "history" ? (
+          <section className="scene-card history-scene">
+            <div className="history-header">
+              <div>
+                <p className="scene-kicker">保存済みデータ</p>
+                <h2>記録した実験データ</h2>
+              </div>
+              <button
+                type="button"
+                className="text-link"
+                onClick={returnFromHistory}
+              >
+                戻る
+              </button>
+            </div>
+
+            {experiments.length === 0 ? (
+              <p className="scene-copy">保存済みの実験データはまだありません。</p>
+            ) : (
+              <div className="history-list">
+                {experiments.map((experiment) => (
+                  <article key={experiment.id} className="history-item">
+                    <div className="history-copy">
+                      <strong>{describeExperiment(experiment)}</strong>
+                      <span>開始: {formatDateTime(experiment.startedAt)}</span>
+                      <span>終了: {formatDateTime(experiment.endedAt)}</span>
+                      <span>完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}</span>
                     </div>
-                    <div className="history-item-actions">
+                    <div className="history-actions">
                       <button
                         type="button"
-                        className="history-button"
-                        onClick={() => void handleDownloadSession(session.id)}
-                        disabled={session.status !== "completed" || isBusy}
+                        className="secondary-action compact-action"
+                        onClick={() => void handleDownloadExperiment(experiment.id)}
+                        disabled={experiment.status !== "completed" || isBusy}
                       >
                         JSON
                       </button>
                       <button
                         type="button"
-                        className="history-button danger"
-                        onClick={() => void handleDeleteSession(session.id)}
+                        className="danger-action compact-action"
+                        onClick={() => void handleDeleteExperiment(experiment.id)}
                         disabled={isBusy}
                       >
                         削除
                       </button>
                     </div>
                   </article>
-                ))
-              )}
-            </div>
-          </div>
-        </aside>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
       </section>
     </main>
   );
