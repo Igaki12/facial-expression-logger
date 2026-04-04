@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type Classifications } from "@mediapipe/tasks-vision";
+import {
+  DrawingUtils,
+  FaceLandmarker,
+  type Classifications,
+} from "@mediapipe/tasks-vision";
 import {
   FLUSH_BATCH_SIZE,
   GUIDE_ROTATION_MS,
@@ -22,6 +26,7 @@ import {
   updateExperimentCompletedPhases,
 } from "./lib/storage";
 import type {
+  ExperimentExport,
   ExperimentRecord,
   FlowMode,
   FrameRecord,
@@ -90,6 +95,7 @@ function describeExperiment(experiment: ExperimentRecord): string {
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const pendingFramesRef = useRef<FrameRecord[]>([]);
@@ -107,8 +113,14 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [faceVisible, setFaceVisible] = useState(false);
   const [guideIndex, setGuideIndex] = useState(0);
+  const [previewExport, setPreviewExport] = useState<ExperimentExport | null>(null);
+  const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
+  const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
   const { stream, status: cameraStatus, error: cameraError, startCamera } = useUserMedia();
   const {
@@ -185,6 +197,97 @@ export default function App() {
       window.clearInterval(timer);
     };
   }, [screen]);
+
+  useEffect(() => {
+    if (!previewExport || !isPreviewPlaying) {
+      return;
+    }
+
+    if (previewExport.frames.length <= 1) {
+      setIsPreviewPlaying(false);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setPreviewFrameIndex((current) => {
+        if (current >= previewExport.frames.length - 1) {
+          setIsPreviewPlaying(false);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 90);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isPreviewPlaying, previewExport]);
+
+  useEffect(() => {
+    const canvas = previewCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    const width = canvas.width;
+    const height = canvas.height;
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = "#04080b";
+    context.fillRect(0, 0, width, height);
+
+    if (!previewExport) {
+      context.fillStyle = "#d4c8b6";
+      context.font = "16px sans-serif";
+      context.fillText("プレビューを選ぶと、保存済みの顔メッシュをここで確認できます。", 24, 44);
+      return;
+    }
+
+    const frame = previewExport.frames[previewFrameIndex];
+    if (!frame) {
+      return;
+    }
+
+    if (!frame.hasFace || frame.faceLandmarks.length === 0) {
+      context.fillStyle = "#d4c8b6";
+      context.font = "18px sans-serif";
+      context.fillText("このフレームでは顔が検出されていません。", 24, 44);
+      return;
+    }
+
+    const drawingUtils = new DrawingUtils(context);
+    for (const landmarks of frame.faceLandmarks) {
+      drawingUtils.drawConnectors(
+        landmarks,
+        FaceLandmarker.FACE_LANDMARKS_TESSELATION,
+        { color: "#52efb8", lineWidth: 1 },
+      );
+      drawingUtils.drawConnectors(
+        landmarks,
+        FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
+        { color: "#f4eee1", lineWidth: 1.2 },
+      );
+      drawingUtils.drawConnectors(
+        landmarks,
+        FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
+        { color: "#f4eee1", lineWidth: 1.2 },
+      );
+      drawingUtils.drawConnectors(
+        landmarks,
+        FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
+        { color: "#f4eee1", lineWidth: 1.2 },
+      );
+      drawingUtils.drawConnectors(
+        landmarks,
+        FaceLandmarker.FACE_LANDMARKS_LIPS,
+        { color: "#c9ffea", lineWidth: 1.2 },
+      );
+    }
+  }, [previewExport, previewFrameIndex]);
 
   const flushBufferedFrames = useCallback(
     (force = false) => {
@@ -523,6 +626,11 @@ export default function App() {
 
       try {
         await deleteExperiment(experimentId);
+        if (previewExport?.experiment.id === experimentId) {
+          setPreviewExport(null);
+          setIsPreviewPlaying(false);
+          setPreviewTargetId(null);
+        }
         await refreshExperiments();
       } catch (caughtError) {
         const message =
@@ -534,8 +642,30 @@ export default function App() {
         setIsBusy(false);
       }
     },
-    [refreshExperiments],
+    [previewExport, refreshExperiments],
   );
+
+  const handlePreviewExperiment = useCallback(async (experimentId: string) => {
+    setPreviewError(null);
+    setDownloadError(null);
+    setIsPreviewLoading(true);
+    setPreviewTargetId(experimentId);
+
+    try {
+      const experimentExport = await getExperimentExport(experimentId);
+      setPreviewExport(experimentExport);
+      setPreviewFrameIndex(0);
+      setIsPreviewPlaying(false);
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "プレビューの読み込みに失敗しました。";
+      setPreviewError(message);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }, []);
 
   const openHistory = useCallback((returnScreen: Screen) => {
     setHistoryReturnScreen(returnScreen);
@@ -586,7 +716,13 @@ export default function App() {
     storageError ??
     cameraError ??
     landmarkerError ??
-    downloadError;
+    downloadError ??
+    previewError;
+
+  const previewFrame = previewExport?.frames[previewFrameIndex] ?? null;
+  const previewPhaseLabel = previewFrame
+    ? PHASE_CONTENT[previewFrame.phaseKey].label
+    : null;
 
   return (
     <main className="story-shell">
@@ -887,36 +1023,133 @@ export default function App() {
             {experiments.length === 0 ? (
               <p className="scene-copy">保存済みの実験データはまだありません。</p>
             ) : (
-              <div className="history-list">
-                {experiments.map((experiment) => (
-                  <article key={experiment.id} className="history-item">
-                    <div className="history-copy">
-                      <strong>{describeExperiment(experiment)}</strong>
-                      <span>開始: {formatDateTime(experiment.startedAt)}</span>
-                      <span>終了: {formatDateTime(experiment.endedAt)}</span>
-                      <span>完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}</span>
+              <>
+                {previewExport ? (
+                  <section className="preview-panel">
+                    <div className="preview-header">
+                      <div>
+                        <p className="scene-kicker">簡易プレビュー</p>
+                        <h3>{describeExperiment(previewExport.experiment)}</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-link"
+                        onClick={() => {
+                          setPreviewExport(null);
+                          setIsPreviewPlaying(false);
+                        }}
+                      >
+                        閉じる
+                      </button>
                     </div>
+
+                    <canvas
+                      ref={previewCanvasRef}
+                      className="preview-canvas"
+                      width={720}
+                      height={540}
+                    />
+
+                    <div className="preview-meta">
+                      <span>フェーズ: {previewPhaseLabel ?? "不明"}</span>
+                      <span>
+                        フレーム: {previewExport.frames.length === 0 ? 0 : previewFrameIndex + 1} /{" "}
+                        {previewExport.frames.length}
+                      </span>
+                      <span>
+                        顔検出: {previewFrame ? (previewFrame.hasFace ? "あり" : "なし") : "未選択"}
+                      </span>
+                    </div>
+
                     <div className="history-actions">
                       <button
                         type="button"
                         className="secondary-action compact-action"
-                        onClick={() => void handleDownloadExperiment(experiment.id)}
-                        disabled={experiment.status !== "completed" || isBusy}
+                        onClick={() => {
+                          setIsPreviewPlaying(false);
+                          setPreviewFrameIndex((current) => Math.max(0, current - 1));
+                        }}
+                        disabled={previewFrameIndex === 0}
                       >
-                        JSON
+                        戻る
                       </button>
                       <button
                         type="button"
-                        className="danger-action compact-action"
-                        onClick={() => void handleDeleteExperiment(experiment.id)}
-                        disabled={isBusy}
+                        className="secondary-action compact-action"
+                        onClick={() => {
+                          if (!previewExport.frames.length) {
+                            return;
+                          }
+                          if (previewFrameIndex >= previewExport.frames.length - 1) {
+                            setPreviewFrameIndex(0);
+                          }
+                          setIsPreviewPlaying((current) => !current);
+                        }}
+                        disabled={previewExport.frames.length === 0}
                       >
-                        削除
+                        {isPreviewPlaying ? "停止" : "再生"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action compact-action"
+                        onClick={() => {
+                          setIsPreviewPlaying(false);
+                          setPreviewFrameIndex((current) =>
+                            previewExport.frames.length === 0
+                              ? 0
+                              : Math.min(previewExport.frames.length - 1, current + 1),
+                          );
+                        }}
+                        disabled={
+                          previewExport.frames.length === 0 ||
+                          previewFrameIndex >= previewExport.frames.length - 1
+                        }
+                      >
+                        進む
                       </button>
                     </div>
-                  </article>
-                ))}
-              </div>
+                  </section>
+                ) : null}
+
+                <div className="history-list">
+                  {experiments.map((experiment) => (
+                    <article key={experiment.id} className="history-item">
+                      <div className="history-copy">
+                        <strong>{describeExperiment(experiment)}</strong>
+                        <span>開始: {formatDateTime(experiment.startedAt)}</span>
+                        <span>終了: {formatDateTime(experiment.endedAt)}</span>
+                        <span>完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}</span>
+                      </div>
+                      <div className="history-actions">
+                        <button
+                          type="button"
+                          className="secondary-action compact-action"
+                          onClick={() => void handlePreviewExperiment(experiment.id)}
+                          disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
+                        >
+                          {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-action compact-action"
+                          onClick={() => void handleDownloadExperiment(experiment.id)}
+                          disabled={experiment.status !== "completed" || isBusy}
+                        >
+                          JSON
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-action compact-action"
+                          onClick={() => void handleDeleteExperiment(experiment.id)}
+                          disabled={isBusy}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
             )}
           </section>
         ) : null}

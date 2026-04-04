@@ -361,6 +361,48 @@ button {
   gap: 12px;
 }
 
+.preview-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 244, 229, 0.08);
+}
+
+.preview-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.preview-header h3 {
+  margin: 0;
+  font-family:
+    "Yu Mincho",
+    "Hiragino Mincho ProN",
+    serif;
+}
+
+.preview-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 18px;
+  background: #04080b;
+  border: 1px solid rgba(255, 244, 229, 0.08);
+}
+
+.preview-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #dccfbe;
+  font-size: 0.92rem;
+}
+
 .history-item {
   display: grid;
   gap: 12px;
