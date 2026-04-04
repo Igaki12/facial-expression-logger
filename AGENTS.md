@@ -107,6 +107,21 @@ IndexedDB は少なくとも以下の 3 ストアを持つこと。
 - `phases`
 - `frames`
 
+現在の IndexedDB スキーマ前提:
+
+- DB 名は `facial-expression-logger-db`
+- 現在のスキーマバージョンは `3`
+- `frames` のキーは `["experimentId", "phaseKey", "frameIndex"]`
+- `phases` のキーは `["experimentId", "phaseKey"]`
+- 旧 `sessions` ストアは移行時に削除する
+- 旧キー構造の `frames` / `phases` が残っている場合は、upgrade 時に再作成して整合を取る
+
+移行上の注意:
+
+- 保存構造を変更する場合は、既存ブラウザの IndexedDB に旧ストアが残る前提で upgrade 処理を書くこと
+- `put()` 時の `Evaluating the object store's key path did not yield a value` は、旧キー定義のまま新オブジェクトを書いている可能性を先に疑うこと
+- ストア名を再利用する場合は、`keyPath` と index 構造の互換性を必ず確認すること
+
 ## 6. 記録制御
 - 被験者向け UI には `記録開始` / `記録停止` の生ボタンを常設しない
 - 各フェーズの記録は、画面遷移に応じて内部で自動開始・自動停止する
@@ -130,6 +145,7 @@ IndexedDB は少なくとも以下の 3 ストアを持つこと。
 - Face Landmarker の出力データは削らず、生データを保持する
 - 長時間記録を考慮し、フレーム配列を React state に積まない
 - GitHub Pages 配信前提を壊さない
+- IndexedDB スキーマを変える場合は、upgrade 処理まで含めて実装する
 - 変更後は `npm run build` を通し、`docs/` 出力が維持されることを確認する
 
 ## 9. 非機能要件
