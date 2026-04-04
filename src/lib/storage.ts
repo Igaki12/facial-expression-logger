@@ -6,11 +6,12 @@ import type {
 } from "../types";
 
 const DB_NAME = "facial-expression-logger-db";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const EXPERIMENTS_STORE = "experiments";
 const PHASES_STORE = "phases";
 const FRAMES_STORE = "frames";
 const EXPERIMENT_INDEX = "by-experiment";
+const LEGACY_SESSIONS_STORE = "sessions";
 
 function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -35,6 +36,32 @@ function openDatabase(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = () => {
       const database = request.result;
+      const transaction = request.transaction;
+
+      if (!transaction) {
+        reject(new Error("IndexedDB upgrade transaction was not available."));
+        return;
+      }
+
+      if (database.objectStoreNames.contains(LEGACY_SESSIONS_STORE)) {
+        database.deleteObjectStore(LEGACY_SESSIONS_STORE);
+      }
+
+      if (database.objectStoreNames.contains(FRAMES_STORE)) {
+        const legacyFramesStore = transaction.objectStore(FRAMES_STORE);
+        const keyPath = JSON.stringify(legacyFramesStore.keyPath);
+        if (keyPath !== JSON.stringify(["experimentId", "phaseKey", "frameIndex"])) {
+          database.deleteObjectStore(FRAMES_STORE);
+        }
+      }
+
+      if (database.objectStoreNames.contains(PHASES_STORE)) {
+        const phasesStore = transaction.objectStore(PHASES_STORE);
+        const keyPath = JSON.stringify(phasesStore.keyPath);
+        if (keyPath !== JSON.stringify(["experimentId", "phaseKey"])) {
+          database.deleteObjectStore(PHASES_STORE);
+        }
+      }
 
       if (!database.objectStoreNames.contains(EXPERIMENTS_STORE)) {
         database.createObjectStore(EXPERIMENTS_STORE, { keyPath: "id" });
