@@ -38,6 +38,8 @@ export interface PhaseRecord {
   endedAt: string | null;
   frameCount: number;
   promptSetVersion: string;
+  sourceWidth: number;
+  sourceHeight: number;
 }
 
 export interface FrameRecord {

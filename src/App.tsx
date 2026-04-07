@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   DrawingUtils,
   FaceLandmarker,
@@ -95,6 +95,7 @@ function describeExperiment(experiment: ExperimentRecord): string {
 
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const previewStageRef = useRef<HTMLDivElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
@@ -121,6 +122,7 @@ export default function App() {
   const [previewTargetId, setPreviewTargetId] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [previewStageSize, setPreviewStageSize] = useState({ width: 0, height: 0 });
 
   const { stream, status: cameraStatus, error: cameraError, startCamera } = useUserMedia();
   const {
@@ -223,9 +225,61 @@ export default function App() {
     };
   }, [isPreviewPlaying, previewExport]);
 
+  const previewPhaseRecord = useMemo(() => {
+    if (!previewExport) {
+      return null;
+    }
+
+    const frame = previewExport.frames[previewFrameIndex];
+    if (!frame) {
+      return previewExport.phases[0] ?? null;
+    }
+
+    return (
+      previewExport.phases.find((phase) => phase.phaseKey === frame.phaseKey) ??
+      previewExport.phases[0] ??
+      null
+    );
+  }, [previewExport, previewFrameIndex]);
+
+  const previewAspectRatio = useMemo(() => {
+    if (!previewPhaseRecord?.sourceWidth || !previewPhaseRecord?.sourceHeight) {
+      return 4 / 3;
+    }
+
+    return previewPhaseRecord.sourceWidth / previewPhaseRecord.sourceHeight;
+  }, [previewPhaseRecord]);
+
   useEffect(() => {
+    const stage = previewStageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const syncSize = () => {
+      const rect = stage.getBoundingClientRect();
+      setPreviewStageSize({
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
+    };
+
+    syncSize();
+
+    const observer = new ResizeObserver(() => {
+      syncSize();
+    });
+    observer.observe(stage);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [previewAspectRatio, previewExport]);
+
+  useEffect(() => {
+    const stage = previewStageRef.current;
     const canvas = previewCanvasRef.current;
-    if (!canvas) {
+    if (!stage || !canvas) {
       return;
     }
 
@@ -234,8 +288,17 @@ export default function App() {
       return;
     }
 
-    const width = canvas.width;
-    const height = canvas.height;
+    const targetWidth = previewStageSize.width || 720;
+    const targetHeight = previewStageSize.height || Math.round(targetWidth / previewAspectRatio);
+    const pixelRatio = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(targetWidth * pixelRatio));
+    const height = Math.max(1, Math.round(targetHeight * pixelRatio));
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
     context.clearRect(0, 0, width, height);
     context.fillStyle = "#04080b";
     context.fillRect(0, 0, width, height);
@@ -287,7 +350,7 @@ export default function App() {
         { color: "#c9ffea", lineWidth: 1.2 },
       );
     }
-  }, [previewExport, previewFrameIndex]);
+  }, [previewAspectRatio, previewExport, previewFrameIndex, previewStageSize]);
 
   const flushBufferedFrames = useCallback(
     (force = false) => {
@@ -487,6 +550,8 @@ export default function App() {
         endedAt: null,
         frameCount: 0,
         promptSetVersion: theme.promptSetVersion,
+        sourceWidth: videoRef.current?.videoWidth || 720,
+        sourceHeight: videoRef.current?.videoHeight || 540,
       };
 
       await createPhase(phase);
@@ -1043,12 +1108,16 @@ export default function App() {
                       </button>
                     </div>
 
-                    <canvas
-                      ref={previewCanvasRef}
-                      className="preview-canvas"
-                      width={720}
-                      height={540}
-                    />
+                    <div
+                      ref={previewStageRef}
+                      className="preview-stage"
+                      style={{ "--preview-aspect-ratio": String(previewAspectRatio) } as CSSProperties}
+                    >
+                      <canvas
+                        ref={previewCanvasRef}
+                        className="preview-canvas"
+                      />
+                    </div>
 
                     <div className="preview-meta">
                       <span>フェーズ: {previewPhaseLabel ?? "不明"}</span>
