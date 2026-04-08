@@ -940,7 +940,7 @@ export default function App() {
             </div>
 
             <div className="recording-badge-row">
-              <span className={`signal-badge${isRecording ? " is-live" : ""}`}>
+              <span className={`signal-badge recording-status${isRecording ? " is-live" : ""}`}>
                 {isRecording ? "記録中" : "準備中"}
               </span>
               <span className={`signal-badge${faceVisible ? " is-good" : ""}`}>
@@ -964,6 +964,9 @@ export default function App() {
         {screen === "work_transition" ? (
           <section className="scene-card transition-scene">
             <p className="scene-kicker">切り替え</p>
+            <div className="scene-icon" aria-hidden="true">
+              <span>◐</span>
+            </div>
             <h2>ありがとうございます。つぎは仕事の話へ移ります。</h2>
             <p className="scene-copy">
               今度は、ふだんの仕事の流れや一日の過ごし方を思い浮かべながら進めてください。
@@ -989,6 +992,9 @@ export default function App() {
         {screen === "completion" ? (
           <section className="scene-card completion-scene">
             <p className="scene-kicker">完了</p>
+            <div className="scene-icon" aria-hidden="true">
+              <span>◎</span>
+            </div>
             <h2>ここまでで実験は完了です。ありがとうございました。</h2>
             <p className="scene-copy">
               最後に、この取り組みで何を見ていたかを短く説明します。
@@ -1015,6 +1021,9 @@ export default function App() {
         {screen === "debrief" ? (
           <section className="scene-card debrief-scene">
             <p className="scene-kicker">実験の説明</p>
+            <div className="scene-icon" aria-hidden="true">
+              <span>◌</span>
+            </div>
             <h2>{RESEARCH_DEBRIEF.title}</h2>
             <p className="scene-copy">{RESEARCH_DEBRIEF.body}</p>
             <p className="support-copy">{RESEARCH_DEBRIEF.detail}</p>
