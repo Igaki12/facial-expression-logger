@@ -184,6 +184,30 @@ button {
   color: #d7c8b2;
 }
 
+.scene-icon {
+  display: flex;
+  justify-content: center;
+  margin: -2px 0 2px;
+}
+
+.scene-icon span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 28px;
+  color: #f7d8ac;
+  font-size: 2.8rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 235, 205, 0.08);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: sceneIconFloat 5.8s ease-in-out infinite;
+}
+
 .intro-copy-cloud,
 .pill-row,
 .recording-badge-row,
@@ -551,6 +575,16 @@ button {
   }
   50% {
     background-position: 100% 50%;
+  }
+}
+
+@keyframes sceneIconFloat {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
   }
 }
 
