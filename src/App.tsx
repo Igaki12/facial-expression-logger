@@ -44,6 +44,15 @@ type Screen =
   | "debrief"
   | "history";
 
+const SCENE_ICON_URLS = {
+  work_transition:
+    "https://api.iconify.design/material-symbols/engineering-outline-rounded.svg?color=%23f7d8ac",
+  completion:
+    "https://api.iconify.design/material-symbols/check-circle-outline-rounded.svg?color=%23f7d8ac",
+  debrief:
+    "https://api.iconify.design/material-symbols/lightbulb-outline.svg?color=%23f7d8ac",
+} as const;
+
 interface FlowState {
   mode: FlowMode;
   experimentId: string | null;
@@ -965,7 +974,12 @@ export default function App() {
           <section className="scene-card transition-scene">
             <p className="scene-kicker">切り替え</p>
             <div className="scene-icon" aria-hidden="true">
-              <span>◐</span>
+              <img
+                src={SCENE_ICON_URLS.work_transition}
+                alt=""
+                className="scene-icon-image"
+                loading="eager"
+              />
             </div>
             <h2>ありがとうございます。つぎは仕事の話へ移ります。</h2>
             <p className="scene-copy">
@@ -993,7 +1007,12 @@ export default function App() {
           <section className="scene-card completion-scene">
             <p className="scene-kicker">完了</p>
             <div className="scene-icon" aria-hidden="true">
-              <span>◎</span>
+              <img
+                src={SCENE_ICON_URLS.completion}
+                alt=""
+                className="scene-icon-image"
+                loading="eager"
+              />
             </div>
             <h2>ここまでで実験は完了です。ありがとうございました。</h2>
             <p className="scene-copy">
@@ -1022,7 +1041,12 @@ export default function App() {
           <section className="scene-card debrief-scene">
             <p className="scene-kicker">実験の説明</p>
             <div className="scene-icon" aria-hidden="true">
-              <span>◌</span>
+              <img
+                src={SCENE_ICON_URLS.debrief}
+                alt=""
+                className="scene-icon-image"
+                loading="eager"
+              />
             </div>
             <h2>{RESEARCH_DEBRIEF.title}</h2>
             <p className="scene-copy">{RESEARCH_DEBRIEF.body}</p>
