@@ -788,9 +788,13 @@ export default function App() {
   const previewPhaseLabel = previewFrame
     ? PHASE_CONTENT[previewFrame.phaseKey].label
     : null;
+  const floatingPromptLabel = screen === "phase_recording" ? "今のヒント" : "話し始めるきっかけ";
+  const showFloatingPrompt =
+    (screen === "phase_guide" || screen === "phase_recording") &&
+    Boolean(currentTheme && rotatingPrompt);
 
   return (
-    <main className="story-shell">
+    <main className={`story-shell${showFloatingPrompt ? " has-floating-prompt" : ""}`}>
       <div className="aurora aurora-one" />
       <div className="aurora aurora-two" />
 
@@ -899,11 +903,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="prompt-card">
-              <p className="prompt-label">話し始めるきっかけ</p>
-              <strong>{rotatingPrompt}</strong>
-            </div>
-
             <div className="pill-row">
               {currentTheme.examplePills.map((example) => (
                 <span key={example} className="example-pill">
@@ -938,11 +937,6 @@ export default function App() {
               <div className="stage-overlay">
                 <p>{faceVisible ? "そのまま自然に話してください。" : "顔が見える位置に戻すと、記録が安定しやすくなります。"}</p>
               </div>
-            </div>
-
-            <div className="prompt-card animated-card">
-              <p className="prompt-label">今のヒント</p>
-              <strong>{rotatingPrompt}</strong>
             </div>
 
             <div className="recording-badge-row">
@@ -1221,6 +1215,13 @@ export default function App() {
               </>
             )}
           </section>
+        ) : null}
+
+        {showFloatingPrompt ? (
+          <div className="floating-prompt" aria-live="polite" aria-atomic="true">
+            <p className="prompt-label">{floatingPromptLabel}</p>
+            <strong>{rotatingPrompt}</strong>
+          </div>
         ) : null}
       </section>
     </main>
