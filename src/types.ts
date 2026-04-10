@@ -54,6 +54,17 @@ export interface FrameRecord {
   facialTransformationMatrixes: Matrix[];
 }
 
+export interface AudioClipRecord {
+  experimentId: string;
+  phaseKey: ThemeKey;
+  label: string;
+  startedAt: string;
+  endedAt: string;
+  mimeType: string;
+  sizeBytes: number;
+  audioBlob: Blob;
+}
+
 export interface ExperimentExport {
   experiment: ExperimentRecord;
   phases: PhaseRecord[];

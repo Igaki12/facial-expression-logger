@@ -1,4 +1,4 @@
-import type { ExperimentExport } from "../types";
+import type { AudioClipRecord, ExperimentExport } from "../types";
 
 function sanitizeTimestamp(timestamp: string): string {
   return timestamp.replace(/[:.]/g, "-");
@@ -11,6 +11,19 @@ export function downloadExperimentExport(experimentExport: ExperimentExport): vo
   const link = document.createElement("a");
   const { experiment } = experimentExport;
   const filename = `experiment_${sanitizeTimestamp(experiment.startedAt)}.json`;
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+export function downloadAudioClip(audioClip: AudioClipRecord, startedAt: string): void {
+  const url = URL.createObjectURL(audioClip.audioBlob);
+  const link = document.createElement("a");
+  const extension = audioClip.mimeType.includes("mp4") ? "m4a" : "webm";
+  const filename = `experiment_${sanitizeTimestamp(startedAt)}_${audioClip.phaseKey}.${extension}`;
 
   link.href = url;
   link.download = filename;

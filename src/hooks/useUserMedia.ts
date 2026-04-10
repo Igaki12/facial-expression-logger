@@ -25,7 +25,7 @@ export function useUserMedia() {
 
     try {
       const nextStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
+        audio: true,
         video: {
           facingMode: "user",
           width: { ideal: 1280 },
@@ -40,7 +40,7 @@ export function useUserMedia() {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "カメラへのアクセスに失敗しました。";
+          : "カメラとマイクへのアクセスに失敗しました。";
       setError(message);
       setStatus("error");
       throw caughtError;

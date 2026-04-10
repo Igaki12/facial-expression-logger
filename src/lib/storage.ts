@@ -1,4 +1,5 @@
 import type {
+  AudioClipRecord,
   ExperimentExport,
   ExperimentRecord,
   FrameRecord,
@@ -6,10 +7,11 @@ import type {
 } from "../types";
 
 const DB_NAME = "facial-expression-logger-db";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const EXPERIMENTS_STORE = "experiments";
 const PHASES_STORE = "phases";
 const FRAMES_STORE = "frames";
+const AUDIO_CLIPS_STORE = "audioClips";
 const EXPERIMENT_INDEX = "by-experiment";
 const LEGACY_SESSIONS_STORE = "sessions";
 
@@ -79,6 +81,13 @@ function openDatabase(): Promise<IDBDatabase> {
           keyPath: ["experimentId", "phaseKey", "frameIndex"],
         });
         framesStore.createIndex(EXPERIMENT_INDEX, "experimentId", { unique: false });
+      }
+
+      if (!database.objectStoreNames.contains(AUDIO_CLIPS_STORE)) {
+        const audioClipsStore = database.createObjectStore(AUDIO_CLIPS_STORE, {
+          keyPath: ["experimentId", "phaseKey"],
+        });
+        audioClipsStore.createIndex(EXPERIMENT_INDEX, "experimentId", { unique: false });
       }
     };
 
@@ -302,6 +311,71 @@ export async function getFramesForExperiment(
   }
 }
 
+export async function saveAudioClip(audioClip: AudioClipRecord): Promise<void> {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(AUDIO_CLIPS_STORE, "readwrite");
+    transaction.objectStore(AUDIO_CLIPS_STORE).put(audioClip);
+    await transactionToPromise(transaction);
+  } finally {
+    database.close();
+  }
+}
+
+export async function getAudioClip(
+  experimentId: string,
+  phaseKey: PhaseRecord["phaseKey"],
+): Promise<AudioClipRecord | undefined> {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(AUDIO_CLIPS_STORE, "readonly");
+    const audioClip = (await requestToPromise(
+      transaction.objectStore(AUDIO_CLIPS_STORE).get([experimentId, phaseKey]),
+    )) as AudioClipRecord | undefined;
+    await transactionToPromise(transaction);
+    return audioClip;
+  } finally {
+    database.close();
+  }
+}
+
+export async function getAudioClipsForExperiment(
+  experimentId: string,
+): Promise<AudioClipRecord[]> {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(AUDIO_CLIPS_STORE, "readonly");
+    const store = transaction.objectStore(AUDIO_CLIPS_STORE);
+    const index = store.index(EXPERIMENT_INDEX);
+    const audioClips = (await requestToPromise(
+      index.getAll(IDBKeyRange.only(experimentId)),
+    )) as AudioClipRecord[];
+    await transactionToPromise(transaction);
+
+    return audioClips.sort((left, right) => left.startedAt.localeCompare(right.startedAt));
+  } finally {
+    database.close();
+  }
+}
+
+export async function deleteAudioClip(
+  experimentId: string,
+  phaseKey: PhaseRecord["phaseKey"],
+): Promise<void> {
+  const database = await openDatabase();
+
+  try {
+    const transaction = database.transaction(AUDIO_CLIPS_STORE, "readwrite");
+    transaction.objectStore(AUDIO_CLIPS_STORE).delete([experimentId, phaseKey]);
+    await transactionToPromise(transaction);
+  } finally {
+    database.close();
+  }
+}
+
 export async function getExperimentExport(
   experimentId: string,
 ): Promise<ExperimentExport> {
@@ -347,13 +421,14 @@ export async function deleteExperiment(experimentId: string): Promise<void> {
 
   try {
     const transaction = database.transaction(
-      [EXPERIMENTS_STORE, PHASES_STORE, FRAMES_STORE],
+      [EXPERIMENTS_STORE, PHASES_STORE, FRAMES_STORE, AUDIO_CLIPS_STORE],
       "readwrite",
     );
 
     transaction.objectStore(EXPERIMENTS_STORE).delete(experimentId);
     await deleteAllByExperimentId(transaction, PHASES_STORE, experimentId);
     await deleteAllByExperimentId(transaction, FRAMES_STORE, experimentId);
+    await deleteAllByExperimentId(transaction, AUDIO_CLIPS_STORE, experimentId);
     await transactionToPromise(transaction);
   } finally {
     database.close();

@@ -13,19 +13,24 @@ import {
 } from "./constants";
 import { useFaceLandmarker } from "./hooks/useFaceLandmarker";
 import { useUserMedia } from "./hooks/useUserMedia";
-import { downloadExperimentExport } from "./lib/export";
+import { downloadAudioClip, downloadExperimentExport } from "./lib/export";
 import {
   appendFrames,
   completeExperiment,
   completePhase,
   createExperiment,
   createPhase,
+  deleteAudioClip,
   deleteExperiment,
+  getAudioClip,
+  getAudioClipsForExperiment,
   getExperimentExport,
   listExperiments,
+  saveAudioClip,
   updateExperimentCompletedPhases,
 } from "./lib/storage";
 import type {
+  AudioClipRecord,
   ExperimentExport,
   ExperimentRecord,
   FlowMode,
@@ -53,6 +58,16 @@ const SCENE_ICON_URLS = {
     "https://api.iconify.design/material-symbols/lightbulb-outline.svg?color=%23f7d8ac",
 } as const;
 
+const ACTION_ICON_URLS = {
+  camera: "https://api.iconify.design/material-symbols/video-camera-front-outline-rounded.svg?color=%23221717",
+  next: "https://api.iconify.design/material-symbols/arrow-forward-rounded.svg?color=%23221717",
+  nextLight: "https://api.iconify.design/material-symbols/arrow-forward-rounded.svg?color=%23f7d8ac",
+  preview: "https://api.iconify.design/material-symbols/visibility-outline-rounded.svg?color=%23f7d8ac",
+  download: "https://api.iconify.design/material-symbols/download-rounded.svg?color=%23f7d8ac",
+  delete: "https://api.iconify.design/material-symbols/delete-outline-rounded.svg?color=%23ffe6de",
+  audio: "https://api.iconify.design/material-symbols/graphic-eq-rounded.svg?color=%23f7d8ac",
+} as const;
+
 interface FlowState {
   mode: FlowMode;
   experimentId: string | null;
@@ -71,6 +86,12 @@ interface ActiveRecordingState {
   promptSetVersion: string;
   startedAt: string;
   startedAtMs: number;
+  audioMimeType: string | null;
+}
+
+interface SelectedAudioState {
+  audioClip: AudioClipRecord;
+  audioUrl: string;
 }
 
 function classificationsToCategories(
@@ -90,6 +111,14 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
+function formatBytes(value: number): string {
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function uniqThemeKeys(values: ThemeKey[]): ThemeKey[] {
   return [...new Set(values)];
 }
@@ -102,6 +131,24 @@ function describeExperiment(experiment: ExperimentRecord): string {
   return "通常フロー";
 }
 
+function getSupportedAudioMimeType(): string | null {
+  if (typeof MediaRecorder === "undefined") {
+    return null;
+  }
+
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+  ];
+
+  return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
+}
+
+function ActionIcon({ src }: { src: string }) {
+  return <img src={src} alt="" className="action-icon" aria-hidden="true" />;
+}
+
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewStageRef = useRef<HTMLDivElement | null>(null);
@@ -109,6 +156,8 @@ export default function App() {
   const animationFrameRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const pendingFramesRef = useRef<FrameRecord[]>([]);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const flushPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const flowRef = useRef<FlowState | null>(null);
   const activeRecordingRef = useRef<ActiveRecordingState | null>(null);
@@ -121,7 +170,9 @@ export default function App() {
   const [lastCompletedExperimentId, setLastCompletedExperimentId] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isAudioRecording, setIsAudioRecording] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [faceVisible, setFaceVisible] = useState(false);
@@ -132,6 +183,8 @@ export default function App() {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewStageSize, setPreviewStageSize] = useState({ width: 0, height: 0 });
+  const [historyAudioClips, setHistoryAudioClips] = useState<Record<string, AudioClipRecord[]>>({});
+  const [selectedAudio, setSelectedAudio] = useState<SelectedAudioState | null>(null);
 
   const { stream, status: cameraStatus, error: cameraError, startCamera } = useUserMedia();
   const {
@@ -169,6 +222,60 @@ export default function App() {
   useEffect(() => {
     void refreshExperiments();
   }, [refreshExperiments]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAudioClips = async () => {
+      if (experiments.length === 0) {
+        setHistoryAudioClips({});
+        return;
+      }
+
+      try {
+        const entries = await Promise.all(
+          experiments.map(async (experiment) => [
+            experiment.id,
+            await getAudioClipsForExperiment(experiment.id),
+          ] as const),
+        );
+
+        if (!cancelled) {
+          setHistoryAudioClips(Object.fromEntries(entries));
+        }
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "音声データの読み込みに失敗しました。";
+        if (!cancelled) {
+          setStorageError(message);
+        }
+      }
+    };
+
+    void loadAudioClips();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [experiments]);
+
+  useEffect(() => {
+    return () => {
+      if (selectedAudio?.audioUrl) {
+        URL.revokeObjectURL(selectedAudio.audioUrl);
+      }
+    };
+  }, [selectedAudio]);
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -393,6 +500,96 @@ export default function App() {
     [],
   );
 
+  const startAudioRecording = useCallback(() => {
+    audioChunksRef.current = [];
+
+    if (typeof MediaRecorder === "undefined") {
+      setAudioError("このブラウザでは録音を開始できません。");
+      return null;
+    }
+
+    const audioTracks = stream?.getAudioTracks() ?? [];
+    if (audioTracks.length === 0) {
+      setAudioError("マイクが使えません。権限を確認してください。");
+      return null;
+    }
+
+    try {
+      const audioMimeType = getSupportedAudioMimeType();
+      const audioStream = new MediaStream(audioTracks);
+      const mediaRecorder = new MediaRecorder(
+        audioStream,
+        audioMimeType ? { mimeType: audioMimeType } : undefined,
+      );
+
+      mediaRecorder.addEventListener("dataavailable", (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      });
+      mediaRecorder.addEventListener("error", () => {
+        setAudioError("録音が途中で止まりました。");
+        setIsAudioRecording(false);
+      });
+      mediaRecorder.addEventListener("start", () => {
+        setAudioError(null);
+        setIsAudioRecording(true);
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      return mediaRecorder.mimeType || audioMimeType || "audio/webm";
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "録音の開始に失敗しました。";
+      setAudioError(message);
+      setIsAudioRecording(false);
+      return null;
+    }
+  }, [stream]);
+
+  const stopAudioRecording = useCallback((fallbackMimeType: string | null) => {
+    const mediaRecorder = mediaRecorderRef.current;
+    if (!mediaRecorder) {
+      setIsAudioRecording(false);
+      return Promise.resolve(null);
+    }
+
+    return new Promise<{ audioBlob: Blob; mimeType: string } | null>((resolve) => {
+      const finalize = () => {
+        const mimeType = mediaRecorder.mimeType || fallbackMimeType || "audio/webm";
+        const audioChunks = audioChunksRef.current.splice(0, audioChunksRef.current.length);
+        mediaRecorderRef.current = null;
+        setIsAudioRecording(false);
+
+        if (audioChunks.length === 0) {
+          resolve(null);
+          return;
+        }
+
+        resolve({
+          audioBlob: new Blob(audioChunks, { type: mimeType }),
+          mimeType,
+        });
+      };
+
+      if (mediaRecorder.state === "inactive") {
+        finalize();
+        return;
+      }
+
+      mediaRecorder.addEventListener("stop", finalize, { once: true });
+      try {
+        mediaRecorder.requestData();
+        mediaRecorder.stop();
+      } catch {
+        finalize();
+      }
+    });
+  }, []);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !faceLandmarker || !stream) {
@@ -453,6 +650,7 @@ export default function App() {
   const beginFlow = useCallback(
     (mode: FlowMode, phaseOrder: ThemeKey[], options?: { sourceExperimentId?: string; retakeOfPhase?: ThemeKey }) => {
       setStorageError(null);
+      setAudioError(null);
       setDownloadError(null);
       setFlow({
         mode,
@@ -485,6 +683,7 @@ export default function App() {
 
   const handlePrepareCamera = useCallback(async () => {
     setStorageError(null);
+    setAudioError(null);
 
     try {
       await initialize();
@@ -566,6 +765,7 @@ export default function App() {
       await createPhase(phase);
       pendingFramesRef.current = [];
       flushPromiseRef.current = Promise.resolve();
+      const audioMimeType = startAudioRecording();
       activeRecordingRef.current = {
         experimentId,
         frameCount: 0,
@@ -573,6 +773,7 @@ export default function App() {
         promptSetVersion: theme.promptSetVersion,
         startedAt: phase.startedAt,
         startedAtMs: Date.now(),
+        audioMimeType,
       };
       setIsRecording(true);
     } catch (caughtError) {
@@ -585,7 +786,7 @@ export default function App() {
       phaseStartPendingRef.current = false;
       setIsBusy(false);
     }
-  }, [currentPhaseKey, faceLandmarker, stream]);
+  }, [currentPhaseKey, faceLandmarker, startAudioRecording, stream]);
 
   useEffect(() => {
     if (screen !== "phase_recording") {
@@ -610,6 +811,20 @@ export default function App() {
       const phaseEndedAt = new Date().toISOString();
       activeRecordingRef.current = null;
       setIsRecording(false);
+      const recordedAudio = await stopAudioRecording(activeRecording.audioMimeType);
+
+      if (recordedAudio && recordedAudio.audioBlob.size > 0) {
+        await saveAudioClip({
+          experimentId: activeRecording.experimentId,
+          phaseKey: activeRecording.phaseKey,
+          label: PHASE_CONTENT[activeRecording.phaseKey].label,
+          startedAt: activeRecording.startedAt,
+          endedAt: phaseEndedAt,
+          mimeType: recordedAudio.mimeType,
+          sizeBytes: recordedAudio.audioBlob.size,
+          audioBlob: recordedAudio.audioBlob,
+        });
+      }
 
       await flushBufferedFrames(true);
       await flushPromiseRef.current;
@@ -672,7 +887,7 @@ export default function App() {
       phaseStopPendingRef.current = false;
       setIsBusy(false);
     }
-  }, [flushBufferedFrames, refreshExperiments]);
+  }, [flushBufferedFrames, refreshExperiments, stopAudioRecording]);
 
   const handleDownloadExperiment = useCallback(async (experimentId: string) => {
     setDownloadError(null);
@@ -688,6 +903,91 @@ export default function App() {
       setDownloadError(message);
     }
   }, []);
+
+  const handlePreviewAudio = useCallback(
+    async (experiment: ExperimentRecord, phaseKey: ThemeKey) => {
+      setPreviewError(null);
+
+      try {
+        const audioClip = await getAudioClip(experiment.id, phaseKey);
+        if (!audioClip) {
+          setPreviewError("この音声は見つかりませんでした。");
+          return;
+        }
+
+        setSelectedAudio({
+          audioClip,
+          audioUrl: URL.createObjectURL(audioClip.audioBlob),
+        });
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "音声の確認に失敗しました。";
+        setPreviewError(message);
+      }
+    },
+    [],
+  );
+
+  const handleDownloadAudio = useCallback(
+    async (experiment: ExperimentRecord, phaseKey: ThemeKey) => {
+      setDownloadError(null);
+
+      try {
+        const audioClip = await getAudioClip(experiment.id, phaseKey);
+        if (!audioClip) {
+          setDownloadError("この音声は見つかりませんでした。");
+          return;
+        }
+
+        downloadAudioClip(audioClip, experiment.startedAt);
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "音声の出力に失敗しました。";
+        setDownloadError(message);
+      }
+    },
+    [],
+  );
+
+  const handleDeleteAudio = useCallback(
+    async (experimentId: string, phaseKey: ThemeKey) => {
+      if (!window.confirm("この音声だけを削除しますか？")) {
+        return;
+      }
+
+      setStorageError(null);
+      setIsBusy(true);
+
+      try {
+        await deleteAudioClip(experimentId, phaseKey);
+        setHistoryAudioClips((current) => ({
+          ...current,
+          [experimentId]: (current[experimentId] ?? []).filter(
+            (audioClip) => audioClip.phaseKey !== phaseKey,
+          ),
+        }));
+        setSelectedAudio((current) =>
+          current?.audioClip.experimentId === experimentId &&
+          current.audioClip.phaseKey === phaseKey
+            ? null
+            : current,
+        );
+      } catch (caughtError) {
+        const message =
+          caughtError instanceof Error
+            ? caughtError.message
+            : "音声の削除に失敗しました。";
+        setStorageError(message);
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [],
+  );
 
   const handleDeleteExperiment = useCallback(
     async (experimentId: string) => {
@@ -705,6 +1005,14 @@ export default function App() {
           setIsPreviewPlaying(false);
           setPreviewTargetId(null);
         }
+        setHistoryAudioClips((current) => {
+          const next = { ...current };
+          delete next[experimentId];
+          return next;
+        });
+        setSelectedAudio((current) =>
+          current?.audioClip.experimentId === experimentId ? null : current,
+        );
         await refreshExperiments();
       } catch (caughtError) {
         const message =
@@ -776,18 +1084,19 @@ export default function App() {
     }
 
     if (flow.mode === "retake") {
-      return `${PHASE_CONTENT[currentPhaseKey].label}の撮り直しを完了`;
+      return `${PHASE_CONTENT[currentPhaseKey].label}を完了`;
     }
 
     if (currentPhaseKey === "hobby") {
-      return "つぎは仕事の案内へ";
+      return "仕事の話へ";
     }
 
-    return "この実験を完了する";
+    return "完了する";
   }, [currentPhaseKey, flow]);
 
   const condensedError =
     storageError ??
+    audioError ??
     cameraError ??
     landmarkerError ??
     downloadError ??
@@ -796,6 +1105,9 @@ export default function App() {
   const previewFrame = previewExport?.frames[previewFrameIndex] ?? null;
   const previewPhaseLabel = previewFrame
     ? PHASE_CONTENT[previewFrame.phaseKey].label
+    : null;
+  const selectedAudioPhaseLabel = selectedAudio
+    ? PHASE_CONTENT[selectedAudio.audioClip.phaseKey].label
     : null;
   const floatingPromptLabel = screen === "phase_recording" ? "今のヒント" : "話し始めるきっかけ";
   const showFloatingPrompt =
@@ -842,9 +1154,9 @@ export default function App() {
         {screen === "intro" ? (
           <section className="scene-card intro-scene">
             <p className="scene-kicker">はじめる前に</p>
-            <h2>これから短い案内に沿って、2 つの話題を順番に話してもらいます。</h2>
+            <h2>2 つの話題を、順番に話していきます。</h2>
             <p className="scene-copy">
-              難しく考えなくて大丈夫です。各画面のヒントに合わせて、思いつくことをそのまま話してください。
+              ヒントを見ながら、思いつくことをそのまま声にしてください。
             </p>
             <div className="intro-copy-cloud">
               <span>話しやすいことからで大丈夫</span>
@@ -857,6 +1169,7 @@ export default function App() {
                 className="primary-action"
                 onClick={handleStartGuidedFlow}
               >
+                <ActionIcon src={ACTION_ICON_URLS.next} />
                 実験を始める
               </button>
             </div>
@@ -866,15 +1179,15 @@ export default function App() {
         {screen === "camera_check" ? (
           <section className="scene-card">
             <p className="scene-kicker">準備</p>
-            <h2>まずはカメラの位置を整えましょう。</h2>
+            <h2>顔が見える位置に整えます。</h2>
             <p className="scene-copy">
-              顔が画面の中央付近に入るようにして、明るさがわかる位置で構えてください。
+              カメラとマイクを使います。声も一緒に記録します。
             </p>
 
             <div className="video-stage">
               <video ref={videoRef} className="camera-video" playsInline muted />
               <div className="stage-overlay">
-                <p>{faceVisible ? "顔が見えています。このままで大丈夫です。" : "顔が見える位置に少しだけ調整してください。"}</p>
+                <p>{faceVisible ? "この位置でOKです。" : "顔が見える位置へ。"}</p>
               </div>
             </div>
 
@@ -885,7 +1198,8 @@ export default function App() {
                 onClick={handlePrepareCamera}
                 disabled={cameraStatus === "ready" || landmarkerStatus === "loading" || isBusy}
               >
-                {cameraStatus === "ready" ? "カメラ準備完了" : "カメラを許可する"}
+                <ActionIcon src={ACTION_ICON_URLS.camera} />
+                {cameraStatus === "ready" ? "準備OK" : "カメラとマイクを許可"}
               </button>
               <button
                 type="button"
@@ -893,7 +1207,8 @@ export default function App() {
                 onClick={handleContinueFromCamera}
                 disabled={cameraStatus !== "ready" || landmarkerStatus !== "ready" || isBusy}
               >
-                このまま次へ
+                <ActionIcon src={ACTION_ICON_URLS.nextLight} />
+                次へ
               </button>
             </div>
           </section>
@@ -908,7 +1223,7 @@ export default function App() {
             <div className="video-stage">
               <video ref={videoRef} className="camera-video" playsInline muted />
               <div className="stage-overlay">
-                <p>{faceVisible ? "表情が見える位置です。このまま話し始められます。" : "顔が少し見える位置に整えてから始めてください。"}</p>
+                <p>{faceVisible ? "この位置で話せます。" : "顔が入る位置へ。"}</p>
               </div>
             </div>
 
@@ -922,14 +1237,15 @@ export default function App() {
 
             <p className="support-copy">{currentTheme.supportiveHint}</p>
 
-            <div className="action-row">
+            <div className="action-row mobile-sticky-actions">
               <button
                 type="button"
                 className="primary-action"
                 onClick={() => setScreen("phase_recording")}
                 disabled={cameraStatus !== "ready" || landmarkerStatus !== "ready" || isBusy}
               >
-                この案内で話し始める
+                <ActionIcon src={ACTION_ICON_URLS.next} />
+                話し始める
               </button>
             </div>
           </section>
@@ -944,26 +1260,30 @@ export default function App() {
             <div className="video-stage large-stage">
               <video ref={videoRef} className="camera-video" playsInline muted />
               <div className="stage-overlay">
-                <p>{faceVisible ? "そのまま自然に話してください。" : "顔が見える位置に戻すと、記録が安定しやすくなります。"}</p>
+                <p>{faceVisible ? "そのまま話してください。" : "顔が見える位置へ。"}</p>
               </div>
             </div>
 
             <div className="recording-badge-row">
               <span className={`signal-badge recording-status${isRecording ? " is-live" : ""}`}>
-                {isRecording ? "記録中" : "準備中"}
+                {isRecording ? "録画中" : "録画準備中"}
+              </span>
+              <span className={`signal-badge recording-status${isAudioRecording ? " is-live" : ""}`}>
+                {isAudioRecording ? "録音中" : "録音準備中"}
               </span>
               <span className={`signal-badge${faceVisible ? " is-good" : ""}`}>
-                {faceVisible ? "顔を確認" : "位置を調整"}
+                {faceVisible ? "顔OK" : "位置調整"}
               </span>
             </div>
 
-            <div className="action-row">
+            <div className="action-row mobile-sticky-actions">
               <button
                 type="button"
                 className="primary-action"
                 onClick={() => void finishCurrentPhase()}
                 disabled={!isRecording || isBusy}
               >
+                <ActionIcon src={ACTION_ICON_URLS.next} />
                 {phaseActionLabel}
               </button>
             </div>
@@ -1055,11 +1375,11 @@ export default function App() {
             <div className="debrief-grid">
               <div className="debrief-item">
                 <span>保存しているもの</span>
-                <strong>表情の数値データ</strong>
+                <strong>表情の数値データ / 音声</strong>
               </div>
               <div className="debrief-item">
                 <span>保存しないもの</span>
-                <strong>映像ファイルそのもの</strong>
+                <strong>映像ファイル / 静止画</strong>
               </div>
             </div>
 
@@ -1207,43 +1527,131 @@ export default function App() {
                   </section>
                 ) : null}
 
+                {selectedAudio ? (
+                  <section className="audio-preview-panel">
+                    <div className="preview-header">
+                      <div>
+                        <p className="scene-kicker">音声確認</p>
+                        <h3>{selectedAudioPhaseLabel}の音声</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-link"
+                        onClick={() => setSelectedAudio(null)}
+                      >
+                        閉じる
+                      </button>
+                    </div>
+                    <audio
+                      className="audio-player"
+                      controls
+                      src={selectedAudio.audioUrl}
+                    />
+                    <div className="preview-meta">
+                      <span>{selectedAudio.audioClip.mimeType}</span>
+                      <span>{formatBytes(selectedAudio.audioClip.sizeBytes)}</span>
+                      <span>開始: {formatDateTime(selectedAudio.audioClip.startedAt)}</span>
+                    </div>
+                  </section>
+                ) : null}
+
                 <div className="history-list">
-                  {experiments.map((experiment) => (
-                    <article key={experiment.id} className="history-item">
-                      <div className="history-copy">
-                        <strong>{describeExperiment(experiment)}</strong>
-                        <span>開始: {formatDateTime(experiment.startedAt)}</span>
-                        <span>終了: {formatDateTime(experiment.endedAt)}</span>
-                        <span>完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}</span>
-                      </div>
-                      <div className="history-actions">
-                        <button
-                          type="button"
-                          className="secondary-action compact-action"
-                          onClick={() => void handlePreviewExperiment(experiment.id)}
-                          disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
-                        >
-                          {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-action compact-action"
-                          onClick={() => void handleDownloadExperiment(experiment.id)}
-                          disabled={experiment.status !== "completed" || isBusy}
-                        >
-                          JSON
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-action compact-action"
-                          onClick={() => void handleDeleteExperiment(experiment.id)}
-                          disabled={isBusy}
-                        >
-                          削除
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                  {experiments.map((experiment) => {
+                    const audioClips = historyAudioClips[experiment.id] ?? [];
+                    const audioPhaseKeys = experiment.completedPhases.length > 0
+                      ? experiment.completedPhases
+                      : experiment.phaseOrder;
+
+                    return (
+                      <article key={experiment.id} className="history-item">
+                        <div className="history-copy">
+                          <strong>{describeExperiment(experiment)}</strong>
+                          <span>開始: {formatDateTime(experiment.startedAt)}</span>
+                          <span>終了: {formatDateTime(experiment.endedAt)}</span>
+                          <span>完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}</span>
+                        </div>
+                        <div className="history-actions">
+                          <button
+                            type="button"
+                            className="secondary-action compact-action"
+                            onClick={() => void handlePreviewExperiment(experiment.id)}
+                            disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
+                          >
+                            <ActionIcon src={ACTION_ICON_URLS.preview} />
+                            {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action compact-action"
+                            onClick={() => void handleDownloadExperiment(experiment.id)}
+                            disabled={experiment.status !== "completed" || isBusy}
+                          >
+                            <ActionIcon src={ACTION_ICON_URLS.download} />
+                            JSON
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-action compact-action"
+                            onClick={() => void handleDeleteExperiment(experiment.id)}
+                            disabled={isBusy}
+                          >
+                            <ActionIcon src={ACTION_ICON_URLS.delete} />
+                            削除
+                          </button>
+                        </div>
+
+                        <div className="audio-history-list" aria-label="音声データ">
+                          <strong className="audio-history-title">
+                            <ActionIcon src={ACTION_ICON_URLS.audio} />
+                            音声
+                          </strong>
+                          {audioPhaseKeys.map((phaseKey) => {
+                            const audioClip = audioClips.find(
+                              (clip) => clip.phaseKey === phaseKey,
+                            );
+
+                            return (
+                              <div key={phaseKey} className="audio-history-row">
+                                <span>
+                                  {PHASE_CONTENT[phaseKey].label}
+                                  {audioClip ? ` / ${formatBytes(audioClip.sizeBytes)}` : " / なし"}
+                                </span>
+                                <div className="history-actions">
+                                  <button
+                                    type="button"
+                                    className="secondary-action compact-action"
+                                    onClick={() => void handlePreviewAudio(experiment, phaseKey)}
+                                    disabled={!audioClip || isBusy}
+                                  >
+                                    <ActionIcon src={ACTION_ICON_URLS.preview} />
+                                    確認
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="secondary-action compact-action"
+                                    onClick={() => void handleDownloadAudio(experiment, phaseKey)}
+                                    disabled={!audioClip || isBusy}
+                                  >
+                                    <ActionIcon src={ACTION_ICON_URLS.download} />
+                                    出力
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="danger-action compact-action"
+                                    onClick={() => void handleDeleteAudio(experiment.id, phaseKey)}
+                                    disabled={!audioClip || isBusy}
+                                  >
+                                    <ActionIcon src={ACTION_ICON_URLS.delete} />
+                                    削除
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               </>
             )}
