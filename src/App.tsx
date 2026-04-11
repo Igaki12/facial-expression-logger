@@ -1049,8 +1049,29 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (screen !== "history" || previewExport || isPreviewLoading) {
+      return;
+    }
+
+    const latestCompletedExperiment = experiments.find(
+      (experiment) => experiment.status === "completed",
+    );
+
+    if (!latestCompletedExperiment) {
+      return;
+    }
+
+    void handlePreviewExperiment(latestCompletedExperiment.id);
+  }, [experiments, handlePreviewExperiment, isPreviewLoading, previewExport, screen]);
+
   const openHistory = useCallback((returnScreen: Screen) => {
     setHistoryReturnScreen(returnScreen);
+    setSelectedAudio(null);
+    setPreviewExport(null);
+    setPreviewTargetId(null);
+    setPreviewFrameIndex(0);
+    setIsPreviewPlaying(false);
     setScreen("history");
   }, []);
 
@@ -1435,125 +1456,117 @@ export default function App() {
             {experiments.length === 0 ? (
               <p className="scene-copy">保存済みの実験データはまだありません。</p>
             ) : (
-              <>
-                {previewExport ? (
-                  <section className="preview-panel">
-                    <div className="preview-header">
-                      <div>
-                        <p className="scene-kicker">簡易プレビュー</p>
-                        <h3>{describeExperiment(previewExport.experiment)}</h3>
+              <div className="history-layout">
+                <div className="history-detail">
+                  {previewExport ? (
+                    <section className="preview-panel">
+                      <div className="preview-header">
+                        <div>
+                          <p className="scene-kicker">簡易プレビュー</p>
+                          <h3>{describeExperiment(previewExport.experiment)}</h3>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        className="text-link"
-                        onClick={() => {
-                          setPreviewExport(null);
-                          setIsPreviewPlaying(false);
-                        }}
-                      >
-                        閉じる
-                      </button>
-                    </div>
 
-                    <div
-                      ref={previewStageRef}
-                      className="preview-stage"
-                      style={{ "--preview-aspect-ratio": String(previewAspectRatio) } as CSSProperties}
-                    >
-                      <canvas
-                        ref={previewCanvasRef}
-                        className="preview-canvas"
+                      <div
+                        ref={previewStageRef}
+                        className="preview-stage"
+                        style={{ "--preview-aspect-ratio": String(previewAspectRatio) } as CSSProperties}
+                      >
+                        <canvas
+                          ref={previewCanvasRef}
+                          className="preview-canvas"
+                        />
+                      </div>
+
+                      <div className="preview-meta">
+                        <span>フェーズ: {previewPhaseLabel ?? "不明"}</span>
+                        <span>
+                          フレーム: {previewExport.frames.length === 0 ? 0 : previewFrameIndex + 1} /{" "}
+                          {previewExport.frames.length}
+                        </span>
+                        <span>
+                          顔検出: {previewFrame ? (previewFrame.hasFace ? "あり" : "なし") : "未選択"}
+                        </span>
+                      </div>
+
+                      <div className="history-actions">
+                        <button
+                          type="button"
+                          className="secondary-action compact-action"
+                          onClick={() => {
+                            setIsPreviewPlaying(false);
+                            setPreviewFrameIndex((current) => Math.max(0, current - 1));
+                          }}
+                          disabled={previewFrameIndex === 0}
+                        >
+                          戻る
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-action compact-action"
+                          onClick={() => {
+                            if (!previewExport.frames.length) {
+                              return;
+                            }
+                            if (previewFrameIndex >= previewExport.frames.length - 1) {
+                              setPreviewFrameIndex(0);
+                            }
+                            setIsPreviewPlaying((current) => !current);
+                          }}
+                          disabled={previewExport.frames.length === 0}
+                        >
+                          {isPreviewPlaying ? "停止" : "再生"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-action compact-action"
+                          onClick={() => {
+                            setIsPreviewPlaying(false);
+                            setPreviewFrameIndex((current) =>
+                              previewExport.frames.length === 0
+                                ? 0
+                                : Math.min(previewExport.frames.length - 1, current + 1),
+                            );
+                          }}
+                          disabled={
+                            previewExport.frames.length === 0 ||
+                            previewFrameIndex >= previewExport.frames.length - 1
+                          }
+                        >
+                          進む
+                        </button>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {selectedAudio ? (
+                    <section className="audio-preview-panel">
+                      <div className="preview-header">
+                        <div>
+                          <p className="scene-kicker">音声確認</p>
+                          <h3>{selectedAudioPhaseLabel}の音声</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={() => setSelectedAudio(null)}
+                        >
+                          閉じる
+                        </button>
+                      </div>
+                      <audio
+                        className="audio-player"
+                        controls
+                        src={selectedAudio.audioUrl}
                       />
-                    </div>
-
-                    <div className="preview-meta">
-                      <span>フェーズ: {previewPhaseLabel ?? "不明"}</span>
-                      <span>
-                        フレーム: {previewExport.frames.length === 0 ? 0 : previewFrameIndex + 1} /{" "}
-                        {previewExport.frames.length}
-                      </span>
-                      <span>
-                        顔検出: {previewFrame ? (previewFrame.hasFace ? "あり" : "なし") : "未選択"}
-                      </span>
-                    </div>
-
-                    <div className="history-actions">
-                      <button
-                        type="button"
-                        className="secondary-action compact-action"
-                        onClick={() => {
-                          setIsPreviewPlaying(false);
-                          setPreviewFrameIndex((current) => Math.max(0, current - 1));
-                        }}
-                        disabled={previewFrameIndex === 0}
-                      >
-                        戻る
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-action compact-action"
-                        onClick={() => {
-                          if (!previewExport.frames.length) {
-                            return;
-                          }
-                          if (previewFrameIndex >= previewExport.frames.length - 1) {
-                            setPreviewFrameIndex(0);
-                          }
-                          setIsPreviewPlaying((current) => !current);
-                        }}
-                        disabled={previewExport.frames.length === 0}
-                      >
-                        {isPreviewPlaying ? "停止" : "再生"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-action compact-action"
-                        onClick={() => {
-                          setIsPreviewPlaying(false);
-                          setPreviewFrameIndex((current) =>
-                            previewExport.frames.length === 0
-                              ? 0
-                              : Math.min(previewExport.frames.length - 1, current + 1),
-                          );
-                        }}
-                        disabled={
-                          previewExport.frames.length === 0 ||
-                          previewFrameIndex >= previewExport.frames.length - 1
-                        }
-                      >
-                        進む
-                      </button>
-                    </div>
-                  </section>
-                ) : null}
-
-                {selectedAudio ? (
-                  <section className="audio-preview-panel">
-                    <div className="preview-header">
-                      <div>
-                        <p className="scene-kicker">音声確認</p>
-                        <h3>{selectedAudioPhaseLabel}の音声</h3>
+                      <div className="preview-meta">
+                        <span>{selectedAudio.audioClip.mimeType}</span>
+                        <span>{formatBytes(selectedAudio.audioClip.sizeBytes)}</span>
+                        <span>開始: {formatDateTime(selectedAudio.audioClip.startedAt)}</span>
                       </div>
-                      <button
-                        type="button"
-                        className="text-link"
-                        onClick={() => setSelectedAudio(null)}
-                      >
-                        閉じる
-                      </button>
-                    </div>
-                    <audio
-                      className="audio-player"
-                      controls
-                      src={selectedAudio.audioUrl}
-                    />
-                    <div className="preview-meta">
-                      <span>{selectedAudio.audioClip.mimeType}</span>
-                      <span>{formatBytes(selectedAudio.audioClip.sizeBytes)}</span>
-                      <span>開始: {formatDateTime(selectedAudio.audioClip.startedAt)}</span>
-                    </div>
-                  </section>
-                ) : null}
+                    </section>
+                  ) : null}
+                </div>
 
                 <div className="history-list">
                   {experiments.map((experiment) => {
@@ -1653,7 +1666,7 @@ export default function App() {
                     );
                   })}
                 </div>
-              </>
+              </div>
             )}
           </section>
         ) : null}

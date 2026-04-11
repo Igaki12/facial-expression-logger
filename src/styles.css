@@ -458,6 +458,16 @@ button {
   align-items: flex-start;
 }
 
+.history-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.history-detail {
+  display: grid;
+  gap: 16px;
+}
+
 .history-list {
   display: grid;
   gap: 12px;
@@ -635,6 +645,26 @@ button {
 
   .large-stage {
     aspect-ratio: 16 / 10;
+  }
+}
+
+@media (min-width: 980px) {
+  .history-layout {
+    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .history-detail {
+    order: 2;
+  }
+
+  .history-list {
+    order: 1;
+    position: sticky;
+    top: 24px;
+    max-height: calc(100vh - 72px);
+    overflow: auto;
+    padding-right: 6px;
   }
 }
 
