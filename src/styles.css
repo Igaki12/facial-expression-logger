@@ -243,7 +243,7 @@ button {
   position: absolute;
   left: 14px;
   right: 14px;
-  bottom: 86px;
+  bottom: 68px;
   z-index: 3;
   gap: 8px;
 }
@@ -696,6 +696,14 @@ button {
   .large-stage {
     aspect-ratio: 16 / 10;
   }
+
+  .mobile-sticky-actions {
+    left: auto;
+    right: max(20px, calc((100vw - 760px) / 2 + 28px));
+    width: auto;
+    max-width: calc(100vw - 40px);
+    transform: none;
+  }
 }
 
 @media (min-width: 980px) {
@@ -735,7 +743,7 @@ button {
   }
 
   .video-status-row {
-    bottom: 82px;
+    bottom: 64px;
   }
 
   .stacked-on-mobile {
