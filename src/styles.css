@@ -79,6 +79,10 @@ button {
   z-index: 1;
 }
 
+.story-panel.is-history {
+  width: min(100%, 1180px);
+}
+
 .story-header {
   display: flex;
   gap: 12px;
@@ -466,6 +470,7 @@ button {
 .history-detail {
   display: grid;
   gap: 16px;
+  align-content: start;
 }
 
 .history-list {
@@ -649,22 +654,27 @@ button {
 }
 
 @media (min-width: 980px) {
+  .history-scene {
+    gap: 22px;
+    padding: 28px 24px 24px;
+  }
+
   .history-layout {
-    grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
     align-items: start;
   }
 
-  .history-detail {
-    order: 2;
-  }
-
   .history-list {
-    order: 1;
     position: sticky;
     top: 24px;
     max-height: calc(100vh - 72px);
     overflow: auto;
     padding-right: 6px;
+  }
+
+  .preview-panel,
+  .audio-preview-panel {
+    padding: 20px;
   }
 }
 
