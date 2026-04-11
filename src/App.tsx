@@ -4,6 +4,7 @@ import {
   FaceLandmarker,
   type Classifications,
 } from "@mediapipe/tasks-vision";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   FLUSH_BATCH_SIZE,
   GUIDE_ROTATION_MS,
@@ -151,6 +152,8 @@ function ActionIcon({ src }: { src: string }) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewStageRef = useRef<HTMLDivElement | null>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -198,6 +201,19 @@ export default function App() {
   useEffect(() => {
     flowRef.current = flow;
   }, [flow]);
+
+  useEffect(() => {
+    if (location.pathname === "/history") {
+      if (screen !== "history") {
+        setScreen("history");
+      }
+      return;
+    }
+
+    if (screen === "history") {
+      setScreen(historyReturnScreen === "history" ? "intro" : historyReturnScreen);
+    }
+  }, [historyReturnScreen, location.pathname, screen]);
 
   const currentPhaseKey = flow ? flow.phaseOrder[flow.currentPhaseIndex] ?? null : null;
   const currentTheme = currentPhaseKey ? PHASE_CONTENT[currentPhaseKey] : null;
@@ -1067,18 +1083,20 @@ export default function App() {
   }, [experiments, handlePreviewExperiment, isPreviewLoading, previewExport, screen]);
 
   const openHistory = useCallback((returnScreen: Screen) => {
-    setHistoryReturnScreen(returnScreen);
+    if (returnScreen !== "history") {
+      setHistoryReturnScreen(returnScreen);
+    }
     setSelectedAudio(null);
     setPreviewExport(null);
     setPreviewTargetId(null);
     setPreviewFrameIndex(0);
     setIsPreviewPlaying(false);
-    setScreen("history");
-  }, []);
+    navigate("/history");
+  }, [navigate]);
 
   const returnFromHistory = useCallback(() => {
-    setScreen(historyReturnScreen);
-  }, [historyReturnScreen]);
+    navigate("/");
+  }, [navigate]);
 
   const progressItems = useMemo(
     () => [
