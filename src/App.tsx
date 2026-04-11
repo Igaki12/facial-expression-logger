@@ -1302,21 +1302,20 @@ export default function App() {
 
             <div className="video-stage large-stage">
               <video ref={videoRef} className="camera-video" playsInline muted />
+              <div className="recording-badge-row video-status-row">
+                <span className={`signal-badge recording-status${isRecording ? " is-live" : ""}`}>
+                  {isRecording ? "録画中" : "録画準備中"}
+                </span>
+                <span className={`signal-badge recording-status${isAudioRecording ? " is-live" : ""}`}>
+                  {isAudioRecording ? "録音中" : "録音準備中"}
+                </span>
+                <span className={`signal-badge${faceVisible ? " is-good" : ""}`}>
+                  {faceVisible ? "顔OK" : "位置調整"}
+                </span>
+              </div>
               <div className="stage-overlay">
                 <p>{faceVisible ? "そのまま話してください。" : "顔が見える位置へ。"}</p>
               </div>
-            </div>
-
-            <div className="recording-badge-row">
-              <span className={`signal-badge recording-status${isRecording ? " is-live" : ""}`}>
-                {isRecording ? "録画中" : "録画準備中"}
-              </span>
-              <span className={`signal-badge recording-status${isAudioRecording ? " is-live" : ""}`}>
-                {isAudioRecording ? "録音中" : "録音準備中"}
-              </span>
-              <span className={`signal-badge${faceVisible ? " is-good" : ""}`}>
-                {faceVisible ? "顔OK" : "位置調整"}
-              </span>
             </div>
 
             <div className="action-row mobile-sticky-actions">

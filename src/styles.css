@@ -235,6 +235,25 @@ button {
   color: #dfd6cb;
 }
 
+.recording-badge-row {
+  align-items: center;
+}
+
+.video-status-row {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 86px;
+  z-index: 3;
+  gap: 8px;
+}
+
+.video-status-row .signal-badge {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
 .recording-status {
   color: #ffe9e5;
   border-color: rgba(255, 142, 142, 0.28);
@@ -557,6 +576,13 @@ button {
   border-top: 1px solid rgba(255, 244, 229, 0.08);
 }
 
+.history-data-group {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 244, 229, 0.08);
+}
+
 .audio-history-title,
 .audio-history-row {
   display: flex;
@@ -687,6 +713,10 @@ button {
     top: calc(env(safe-area-inset-top, 0px) + 78px);
     width: min(calc(100vw - 20px), 560px);
     padding: 14px 16px;
+  }
+
+  .video-status-row {
+    bottom: 82px;
   }
 
   .stacked-on-mobile {

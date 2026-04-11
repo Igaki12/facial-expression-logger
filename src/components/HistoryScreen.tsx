@@ -127,34 +127,40 @@ export function HistoryScreen({
                       完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}
                     </span>
                   </div>
-                  <div className="history-actions">
-                    <button
-                      type="button"
-                      className="secondary-action compact-action"
-                      onClick={() => void onPreviewExperiment(experiment.id)}
-                      disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
-                    >
+                  <div className="history-data-group" aria-label="録画データ">
+                    <strong className="audio-history-title">
                       <ActionIcon src={iconUrls.preview} />
-                      {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary-action compact-action"
-                      onClick={() => void onDownloadExperiment(experiment.id)}
-                      disabled={experiment.status !== "completed" || isBusy}
-                    >
-                      <ActionIcon src={iconUrls.download} />
-                      JSON
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-action compact-action"
-                      onClick={() => void onDeleteExperiment(experiment.id)}
-                      disabled={isBusy}
-                    >
-                      <ActionIcon src={iconUrls.delete} />
-                      削除
-                    </button>
+                      録画
+                    </strong>
+                    <div className="history-actions">
+                      <button
+                        type="button"
+                        className="secondary-action compact-action"
+                        onClick={() => void onPreviewExperiment(experiment.id)}
+                        disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
+                      >
+                        <ActionIcon src={iconUrls.preview} />
+                        {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-action compact-action"
+                        onClick={() => void onDownloadExperiment(experiment.id)}
+                        disabled={experiment.status !== "completed" || isBusy}
+                      >
+                        <ActionIcon src={iconUrls.download} />
+                        JSON
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-action compact-action"
+                        onClick={() => void onDeleteExperiment(experiment.id)}
+                        disabled={isBusy}
+                      >
+                        <ActionIcon src={iconUrls.delete} />
+                        削除
+                      </button>
+                    </div>
                   </div>
 
                   <div className="audio-history-list" aria-label="音声データ">
