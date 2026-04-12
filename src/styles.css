@@ -505,10 +505,54 @@ button {
   gap: 16px;
 }
 
+.history-header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .history-detail {
   display: grid;
   gap: 16px;
   align-content: start;
+}
+
+.history-mobile-summary {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 244, 229, 0.08);
+}
+
+.history-mobile-copy {
+  display: grid;
+  gap: 4px;
+  color: #e4d8c9;
+}
+
+.history-mobile-copy span {
+  color: #d0c1ae;
+  font-size: 0.86rem;
+}
+
+.history-list-toggle {
+  display: none;
+}
+
+.history-list-shell {
+  display: grid;
+}
+
+.history-list-backdrop,
+.history-list-panel-header {
+  display: none;
+}
+
+.history-list-panel {
+  display: grid;
+  gap: 12px;
 }
 
 .history-list {
@@ -707,6 +751,10 @@ button {
 }
 
 @media (min-width: 980px) {
+  .history-mobile-summary {
+    display: none;
+  }
+
   .history-scene {
     gap: 22px;
     padding: 28px 24px 24px;
@@ -734,6 +782,72 @@ button {
 @media (max-width: 560px) {
   .story-header {
     flex-direction: column;
+  }
+
+  .history-list-toggle {
+    display: inline-flex;
+  }
+
+  .history-list-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    pointer-events: none;
+  }
+
+  .history-list-shell.is-open {
+    pointer-events: auto;
+  }
+
+  .history-list-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: rgba(8, 10, 12, 0.58);
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  .history-list-shell.is-open .history-list-backdrop {
+    opacity: 1;
+  }
+
+  .history-list-panel {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    max-height: min(74vh, 680px);
+    padding: 16px;
+    border-radius: 22px;
+    background: rgba(23, 29, 34, 0.96);
+    border: 1px solid rgba(255, 244, 229, 0.12);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+    transform: translateY(18px);
+    opacity: 0;
+    transition:
+      transform 180ms ease,
+      opacity 180ms ease;
+    overflow: hidden;
+  }
+
+  .history-list-shell.is-open .history-list-panel {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .history-list-panel-header {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .history-list {
+    max-height: min(58vh, 560px);
+    overflow: auto;
+    padding-right: 4px;
   }
 
   .floating-prompt {

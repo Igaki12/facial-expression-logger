@@ -1,4 +1,4 @@
-import { type CSSProperties, type RefObject } from "react";
+import { useEffect, useState, type CSSProperties, type RefObject } from "react";
 import { PHASE_CONTENT } from "../constants";
 import type {
   AudioClipRecord,
@@ -90,6 +90,17 @@ export function HistoryScreen({
   onPreviewNext,
   onCloseAudio,
 }: HistoryScreenProps) {
+  const [isListOpen, setIsListOpen] = useState(false);
+  const selectedExperimentLabel = previewExport
+    ? describeExperiment(previewExport.experiment)
+    : "最新の記録";
+
+  useEffect(() => {
+    if (experiments.length === 0) {
+      setIsListOpen(false);
+    }
+  }, [experiments.length]);
+
   return (
     <section className="scene-card history-scene">
       <div className="history-header">
@@ -97,125 +108,43 @@ export function HistoryScreen({
           <p className="scene-kicker">保存済みデータ</p>
           <h2>記録した実験データ</h2>
         </div>
-        <button
-          type="button"
-          className="text-link"
-          onClick={onReturn}
-        >
-          戻る
-        </button>
+        <div className="history-header-actions">
+          <button
+            type="button"
+            className="secondary-action compact-action history-list-toggle"
+            onClick={() => setIsListOpen(true)}
+          >
+            一覧
+          </button>
+          <button
+            type="button"
+            className="text-link"
+            onClick={onReturn}
+          >
+            戻る
+          </button>
+        </div>
       </div>
 
       {experiments.length === 0 ? (
         <p className="scene-copy">保存済みの実験データはまだありません。</p>
       ) : (
         <div className="history-layout">
-          <div className="history-list">
-            {experiments.map((experiment) => {
-              const audioClips = historyAudioClips[experiment.id] ?? [];
-              const audioPhaseKeys = experiment.completedPhases.length > 0
-                ? experiment.completedPhases
-                : experiment.phaseOrder;
-
-              return (
-                <article key={experiment.id} className="history-item">
-                  <div className="history-copy">
-                    <strong>{describeExperiment(experiment)}</strong>
-                    <span>開始: {formatDateTime(experiment.startedAt)}</span>
-                    <span>終了: {formatDateTime(experiment.endedAt)}</span>
-                    <span>
-                      完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}
-                    </span>
-                  </div>
-                  <div className="history-data-group" aria-label="録画データ">
-                    <strong className="audio-history-title">
-                      <ActionIcon src={iconUrls.preview} />
-                      録画
-                    </strong>
-                    <div className="history-actions">
-                      <button
-                        type="button"
-                        className="secondary-action compact-action"
-                        onClick={() => void onPreviewExperiment(experiment.id)}
-                        disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
-                      >
-                        <ActionIcon src={iconUrls.preview} />
-                        {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary-action compact-action"
-                        onClick={() => void onDownloadExperiment(experiment.id)}
-                        disabled={experiment.status !== "completed" || isBusy}
-                      >
-                        <ActionIcon src={iconUrls.download} />
-                        JSON
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-action compact-action"
-                        onClick={() => void onDeleteExperiment(experiment.id)}
-                        disabled={isBusy}
-                      >
-                        <ActionIcon src={iconUrls.delete} />
-                        削除
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="audio-history-list" aria-label="音声データ">
-                    <strong className="audio-history-title">
-                      <ActionIcon src={iconUrls.audio} />
-                      音声
-                    </strong>
-                    {audioPhaseKeys.map((phaseKey) => {
-                      const audioClip = audioClips.find((clip) => clip.phaseKey === phaseKey);
-
-                      return (
-                        <div key={phaseKey} className="audio-history-row">
-                          <span>
-                            {PHASE_CONTENT[phaseKey].label}
-                            {audioClip ? ` / ${formatBytes(audioClip.sizeBytes)}` : " / なし"}
-                          </span>
-                          <div className="history-actions">
-                            <button
-                              type="button"
-                              className="secondary-action compact-action"
-                              onClick={() => void onPreviewAudio(experiment, phaseKey)}
-                              disabled={!audioClip || isBusy}
-                            >
-                              <ActionIcon src={iconUrls.preview} />
-                              確認
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary-action compact-action"
-                              onClick={() => void onDownloadAudio(experiment, phaseKey)}
-                              disabled={!audioClip || isBusy}
-                            >
-                              <ActionIcon src={iconUrls.download} />
-                              出力
-                            </button>
-                            <button
-                              type="button"
-                              className="danger-action compact-action"
-                              onClick={() => void onDeleteAudio(experiment.id, phaseKey)}
-                              disabled={!audioClip || isBusy}
-                            >
-                              <ActionIcon src={iconUrls.delete} />
-                              削除
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
           <div className="history-detail">
+            <div className="history-mobile-summary">
+              <div className="history-mobile-copy">
+                <span>表示中</span>
+                <strong>{selectedExperimentLabel}</strong>
+              </div>
+              <button
+                type="button"
+                className="secondary-action compact-action"
+                onClick={() => setIsListOpen(true)}
+              >
+                一覧を開く
+              </button>
+            </div>
+
             {previewExport ? (
               <section className="preview-panel">
                 <div className="preview-header">
@@ -298,6 +227,141 @@ export function HistoryScreen({
                 </div>
               </section>
             ) : null}
+          </div>
+
+          <div className={`history-list-shell${isListOpen ? " is-open" : ""}`}>
+            <button
+              type="button"
+              className="history-list-backdrop"
+              aria-label="一覧を閉じる"
+              onClick={() => setIsListOpen(false)}
+            />
+            <div className="history-list-panel">
+              <div className="history-list-panel-header">
+                <div>
+                  <p className="scene-kicker">保存済み一覧</p>
+                  <strong>{experiments.length}件</strong>
+                </div>
+                <button
+                  type="button"
+                  className="text-link"
+                  onClick={() => setIsListOpen(false)}
+                >
+                  閉じる
+                </button>
+              </div>
+
+              <div className="history-list">
+                {experiments.map((experiment) => {
+                  const audioClips = historyAudioClips[experiment.id] ?? [];
+                  const audioPhaseKeys = experiment.completedPhases.length > 0
+                    ? experiment.completedPhases
+                    : experiment.phaseOrder;
+
+                  return (
+                    <article key={experiment.id} className="history-item">
+                      <div className="history-copy">
+                        <strong>{describeExperiment(experiment)}</strong>
+                        <span>開始: {formatDateTime(experiment.startedAt)}</span>
+                        <span>終了: {formatDateTime(experiment.endedAt)}</span>
+                        <span>
+                          完了フェーズ: {experiment.completedPhases.map((phaseKey) => PHASE_CONTENT[phaseKey].label).join(" / ") || "なし"}
+                        </span>
+                      </div>
+                      <div className="history-data-group" aria-label="録画データ">
+                        <strong className="audio-history-title">
+                          <ActionIcon src={iconUrls.preview} />
+                          録画
+                        </strong>
+                        <div className="history-actions">
+                          <button
+                            type="button"
+                            className="secondary-action compact-action"
+                            onClick={() => {
+                              setIsListOpen(false);
+                              void onPreviewExperiment(experiment.id);
+                            }}
+                            disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
+                          >
+                            <ActionIcon src={iconUrls.preview} />
+                            {isPreviewLoading && previewTargetId === experiment.id ? "読込中" : "確認"}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary-action compact-action"
+                            onClick={() => void onDownloadExperiment(experiment.id)}
+                            disabled={experiment.status !== "completed" || isBusy}
+                          >
+                            <ActionIcon src={iconUrls.download} />
+                            JSON
+                          </button>
+                          <button
+                            type="button"
+                            className="danger-action compact-action"
+                            onClick={() => void onDeleteExperiment(experiment.id)}
+                            disabled={isBusy}
+                          >
+                            <ActionIcon src={iconUrls.delete} />
+                            削除
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="audio-history-list" aria-label="音声データ">
+                        <strong className="audio-history-title">
+                          <ActionIcon src={iconUrls.audio} />
+                          音声
+                        </strong>
+                        {audioPhaseKeys.map((phaseKey) => {
+                          const audioClip = audioClips.find((clip) => clip.phaseKey === phaseKey);
+
+                          return (
+                            <div key={phaseKey} className="audio-history-row">
+                              <span>
+                                {PHASE_CONTENT[phaseKey].label}
+                                {audioClip ? ` / ${formatBytes(audioClip.sizeBytes)}` : " / なし"}
+                              </span>
+                              <div className="history-actions">
+                                <button
+                                  type="button"
+                                  className="secondary-action compact-action"
+                                  onClick={() => {
+                                    setIsListOpen(false);
+                                    void onPreviewAudio(experiment, phaseKey);
+                                  }}
+                                  disabled={!audioClip || isBusy}
+                                >
+                                  <ActionIcon src={iconUrls.preview} />
+                                  確認
+                                </button>
+                                <button
+                                  type="button"
+                                  className="secondary-action compact-action"
+                                  onClick={() => void onDownloadAudio(experiment, phaseKey)}
+                                  disabled={!audioClip || isBusy}
+                                >
+                                  <ActionIcon src={iconUrls.download} />
+                                  出力
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger-action compact-action"
+                                  onClick={() => void onDeleteAudio(experiment.id, phaseKey)}
+                                  disabled={!audioClip || isBusy}
+                                >
+                                  <ActionIcon src={iconUrls.delete} />
+                                  削除
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
