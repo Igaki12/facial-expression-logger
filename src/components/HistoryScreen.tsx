@@ -91,6 +91,9 @@ export function HistoryScreen({
   onCloseAudio,
 }: HistoryScreenProps) {
   const [isListOpen, setIsListOpen] = useState(false);
+  const [isSingleColumnLayout, setIsSingleColumnLayout] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 980 : true,
+  );
   const selectedExperimentLabel = previewExport
     ? describeExperiment(previewExport.experiment)
     : "最新の記録";
@@ -100,6 +103,28 @@ export function HistoryScreen({
       setIsListOpen(false);
     }
   }, [experiments.length]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 980px)");
+    const syncLayout = () => {
+      const nextIsSingleColumn = !mediaQuery.matches;
+      setIsSingleColumnLayout(nextIsSingleColumn);
+      if (!nextIsSingleColumn) {
+        setIsListOpen(false);
+      }
+    };
+
+    syncLayout();
+    mediaQuery.addEventListener("change", syncLayout);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncLayout);
+    };
+  }, []);
 
   return (
     <section className="scene-card history-scene">
@@ -278,7 +303,9 @@ export function HistoryScreen({
                             type="button"
                             className="secondary-action compact-action"
                             onClick={() => {
-                              setIsListOpen(false);
+                              if (isSingleColumnLayout) {
+                                setIsListOpen(false);
+                              }
                               void onPreviewExperiment(experiment.id);
                             }}
                             disabled={experiment.status !== "completed" || isBusy || isPreviewLoading}
@@ -326,7 +353,9 @@ export function HistoryScreen({
                                   type="button"
                                   className="secondary-action compact-action"
                                   onClick={() => {
-                                    setIsListOpen(false);
+                                    if (isSingleColumnLayout) {
+                                      setIsListOpen(false);
+                                    }
                                     void onPreviewAudio(experiment, phaseKey);
                                   }}
                                   disabled={!audioClip || isBusy}
