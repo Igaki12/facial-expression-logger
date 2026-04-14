@@ -1227,6 +1227,10 @@ export default function App() {
   const selectedAudioPhaseLabel = selectedAudio
     ? PHASE_CONTENT[selectedAudio.audioClip.phaseKey].label
     : null;
+  const historyPermalink =
+    typeof window === "undefined"
+      ? `${import.meta.env.BASE_URL}#/history`
+      : `${window.location.origin}${import.meta.env.BASE_URL}#/history`;
   const floatingPromptLabel = screen === "phase_recording" ? "今の話題" : "話し始めるきっかけ";
   const showFloatingPrompt =
     (screen === "phase_guide" || screen === "phase_recording") &&
@@ -1243,13 +1247,21 @@ export default function App() {
             <p className="eyebrow">Guided Session</p>
             <h1>案内に沿って、短い会話を進めてください</h1>
           </div>
-          <button
-            type="button"
-            className="text-link"
-            onClick={() => openHistory(screen)}
-          >
-            保存済みデータ
-          </button>
+          <div className="story-header-actions">
+            <a
+              className="text-link"
+              href={historyPermalink}
+            >
+              データ履歴
+            </a>
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => openHistory(screen)}
+            >
+              保存済みデータ
+            </button>
+          </div>
         </header>
 
         <div className="progress-strip" aria-label="進行状況">

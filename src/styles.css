@@ -120,6 +120,18 @@ button {
   padding: 0;
 }
 
+.story-header-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.story-header-actions .text-link {
+  text-decoration: none;
+}
+
 .align-left {
   align-self: flex-start;
 }
