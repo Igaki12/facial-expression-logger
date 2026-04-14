@@ -423,9 +423,11 @@ button {
 }
 
 .floating-prompt-caption {
+  justify-self: end;
   color: #d9c9b6;
   font-size: 0.74rem;
   line-height: 1.4;
+  text-align: right;
 }
 
 .action-row,
