@@ -30,6 +30,8 @@ interface HistoryScreenProps {
   previewStageRef: RefObject<HTMLDivElement | null>;
   previewCanvasRef: RefObject<HTMLCanvasElement | null>;
   previewPhaseLabel: string | null;
+  previewPromptText: string | null;
+  previewPromptStepLabel: string | null;
   previewFrameIndex: number;
   previewFrameCount: number;
   previewHasFaceLabel: string;
@@ -68,6 +70,8 @@ export function HistoryScreen({
   previewStageRef,
   previewCanvasRef,
   previewPhaseLabel,
+  previewPromptText,
+  previewPromptStepLabel,
   previewFrameIndex,
   previewFrameCount,
   previewHasFaceLabel,
@@ -189,6 +193,14 @@ export function HistoryScreen({
                     className="preview-canvas"
                   />
                 </div>
+
+                {previewPromptText ? (
+                  <div className="preview-topic-card">
+                    <span>今の話題</span>
+                    <strong>{previewPromptText}</strong>
+                    {previewPromptStepLabel ? <small>{previewPromptStepLabel}</small> : null}
+                  </div>
+                ) : null}
 
                 <div className="preview-meta">
                   <span>フェーズ: {previewPhaseLabel ?? "不明"}</span>

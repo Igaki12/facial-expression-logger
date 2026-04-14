@@ -7,7 +7,6 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   FLUSH_BATCH_SIZE,
-  GUIDE_ROTATION_MS,
   PHASE_CONTENT,
   PHASE_ORDER,
   RESEARCH_DEBRIEF,
@@ -39,6 +38,7 @@ import type {
   FrameRecord,
   PhaseRecord,
   ThemeKey,
+  TopicChangeRecord,
 } from "./types";
 
 type Screen =
@@ -86,9 +86,11 @@ interface ActiveRecordingState {
   frameCount: number;
   phaseKey: ThemeKey;
   promptSetVersion: string;
+  promptIndex: number;
   startedAt: string;
   startedAtMs: number;
   audioMimeType: string | null;
+  topicChanges: TopicChangeRecord[];
 }
 
 interface SelectedAudioState {
@@ -131,6 +133,46 @@ function describeExperiment(experiment: ExperimentRecord): string {
   }
 
   return "通常フロー";
+}
+
+function getPromptIndex(themeKey: ThemeKey, index: number): number {
+  const promptCount = PHASE_CONTENT[themeKey].rotatingPrompts.length;
+  if (promptCount === 0) {
+    return 0;
+  }
+  return ((index % promptCount) + promptCount) % promptCount;
+}
+
+function getPromptText(themeKey: ThemeKey, index: number): string {
+  const prompts = PHASE_CONTENT[themeKey].rotatingPrompts;
+  if (prompts.length === 0) {
+    return "";
+  }
+  return prompts[getPromptIndex(themeKey, index)] ?? "";
+}
+
+function resolvePreviewPromptText(
+  phase: PhaseRecord | null,
+  frame: FrameRecord | null,
+): string | null {
+  if (frame?.promptText) {
+    return frame.promptText;
+  }
+
+  if (!phase || !frame || !phase.topicChanges?.length) {
+    return null;
+  }
+
+  const sortedTopicChanges = [...phase.topicChanges].sort(
+    (left, right) => left.elapsedMs - right.elapsedMs,
+  );
+  const currentTopics = sortedTopicChanges.filter(
+    (topicChange) => topicChange.elapsedMs <= frame.elapsedMs,
+  );
+  const currentTopic =
+    currentTopics[currentTopics.length - 1] ?? sortedTopicChanges[0];
+
+  return currentTopic?.promptText ?? null;
 }
 
 function getSupportedAudioMimeType(): string | null {
@@ -217,9 +259,7 @@ export default function App() {
 
   const currentPhaseKey = flow ? flow.phaseOrder[flow.currentPhaseIndex] ?? null : null;
   const currentTheme = currentPhaseKey ? PHASE_CONTENT[currentPhaseKey] : null;
-  const rotatingPrompt = currentTheme
-    ? currentTheme.rotatingPrompts[guideIndex % currentTheme.rotatingPrompts.length]
-    : "";
+  const rotatingPrompt = currentPhaseKey ? getPromptText(currentPhaseKey, guideIndex) : "";
 
   const refreshExperiments = useCallback(async () => {
     try {
@@ -314,24 +354,6 @@ export default function App() {
   useEffect(() => {
     setGuideIndex(0);
   }, [screen, currentPhaseKey]);
-
-  useEffect(() => {
-    if (
-      screen !== "phase_guide" &&
-      screen !== "phase_recording" &&
-      screen !== "work_transition"
-    ) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setGuideIndex((current) => current + 1);
-    }, GUIDE_ROTATION_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [screen]);
 
   useEffect(() => {
     if (!previewExport || !isPreviewPlaying) {
@@ -629,6 +651,7 @@ export default function App() {
           const activeRecording = activeRecordingRef.current;
           if (activeRecording) {
             const timestampMs = Date.now();
+            const promptText = getPromptText(activeRecording.phaseKey, activeRecording.promptIndex);
             const frameRecord: FrameRecord = {
               experimentId: activeRecording.experimentId,
               phaseKey: activeRecording.phaseKey,
@@ -636,6 +659,8 @@ export default function App() {
               timestampMs,
               elapsedMs: timestampMs - activeRecording.startedAtMs,
               hasFace,
+              promptIndex: activeRecording.promptIndex,
+              promptText,
               faceLandmarks: results.faceLandmarks,
               faceBlendshapes: classificationsToCategories(results.faceBlendshapes),
               facialTransformationMatrixes: results.facialTransformationMatrixes ?? [],
@@ -738,6 +763,8 @@ export default function App() {
 
     try {
       const theme = PHASE_CONTENT[currentPhaseKey];
+      const initialPromptIndex = 0;
+      const initialPromptText = getPromptText(currentPhaseKey, initialPromptIndex);
       let experimentId = currentFlow.experimentId;
       let startedAt = currentFlow.startedAt;
 
@@ -777,6 +804,14 @@ export default function App() {
         promptSetVersion: theme.promptSetVersion,
         sourceWidth: videoRef.current?.videoWidth || 720,
         sourceHeight: videoRef.current?.videoHeight || 540,
+        topicChanges: [
+          {
+            promptIndex: initialPromptIndex,
+            promptText: initialPromptText,
+            elapsedMs: 0,
+            timestampMs: Date.now(),
+          },
+        ],
       };
 
       await createPhase(phase);
@@ -788,9 +823,11 @@ export default function App() {
         frameCount: 0,
         phaseKey: currentPhaseKey,
         promptSetVersion: theme.promptSetVersion,
+        promptIndex: initialPromptIndex,
         startedAt: phase.startedAt,
         startedAtMs: Date.now(),
         audioMimeType,
+        topicChanges: phase.topicChanges ?? [],
       };
       setIsRecording(true);
     } catch (caughtError) {
@@ -812,6 +849,38 @@ export default function App() {
 
     void ensurePhaseRecordingStarted();
   }, [ensurePhaseRecordingStarted, screen]);
+
+  const handleAdvancePrompt = useCallback(() => {
+    if (screen !== "phase_recording" || !currentPhaseKey) {
+      return;
+    }
+
+    const activeRecording = activeRecordingRef.current;
+    const basePromptIndex =
+      activeRecording?.phaseKey === currentPhaseKey
+        ? activeRecording.promptIndex
+        : guideIndex;
+    const nextPromptIndex = getPromptIndex(currentPhaseKey, basePromptIndex + 1);
+    const nextPromptText = getPromptText(currentPhaseKey, nextPromptIndex);
+
+    setGuideIndex(nextPromptIndex);
+
+    if (!activeRecording || activeRecording.phaseKey !== currentPhaseKey) {
+      return;
+    }
+
+    const timestampMs = Date.now();
+    activeRecording.promptIndex = nextPromptIndex;
+    activeRecording.topicChanges = [
+      ...activeRecording.topicChanges,
+      {
+        promptIndex: nextPromptIndex,
+        promptText: nextPromptText,
+        elapsedMs: timestampMs - activeRecording.startedAtMs,
+        timestampMs,
+      },
+    ];
+  }, [currentPhaseKey, guideIndex, screen]);
 
   const finishCurrentPhase = useCallback(async () => {
     const currentFlow = flowRef.current;
@@ -850,6 +919,7 @@ export default function App() {
         activeRecording.phaseKey,
         phaseEndedAt,
         activeRecording.frameCount,
+        activeRecording.topicChanges,
       );
 
       const completedPhases = uniqThemeKeys([
@@ -1146,16 +1216,21 @@ export default function App() {
   const previewPhaseLabel = previewFrame
     ? PHASE_CONTENT[previewFrame.phaseKey].label
     : null;
+  const previewPromptText = resolvePreviewPromptText(previewPhaseRecord, previewFrame);
+  const previewPromptStepLabel =
+    previewFrame?.promptIndex !== undefined && previewFrame.phaseKey
+      ? `${getPromptIndex(previewFrame.phaseKey, previewFrame.promptIndex) + 1} / ${PHASE_CONTENT[previewFrame.phaseKey].rotatingPrompts.length}`
+      : null;
   const previewHasFaceLabel = previewFrame
     ? (previewFrame.hasFace ? "あり" : "なし")
     : "未選択";
   const selectedAudioPhaseLabel = selectedAudio
     ? PHASE_CONTENT[selectedAudio.audioClip.phaseKey].label
     : null;
-  const floatingPromptLabel = screen === "phase_recording" ? "今のヒント" : "話し始めるきっかけ";
+  const floatingPromptLabel = screen === "phase_recording" ? "今の話題" : "話し始めるきっかけ";
   const showFloatingPrompt =
     (screen === "phase_guide" || screen === "phase_recording") &&
-    Boolean(currentTheme && rotatingPrompt);
+    Boolean(currentTheme);
 
   return (
     <main className={`story-shell${showFloatingPrompt ? " has-floating-prompt" : ""}`}>
@@ -1269,16 +1344,6 @@ export default function App() {
                 <p>{faceVisible ? "この位置で話せます。" : "顔が入る位置へ。"}</p>
               </div>
             </div>
-
-            <div className="pill-row">
-              {currentTheme.examplePills.map((example) => (
-                <span key={example} className="example-pill">
-                  {example}
-                </span>
-              ))}
-            </div>
-
-            <p className="support-copy">{currentTheme.supportiveHint}</p>
 
             <div className="action-row mobile-sticky-actions">
               <button
@@ -1470,6 +1535,8 @@ export default function App() {
             previewStageRef={previewStageRef}
             previewCanvasRef={previewCanvasRef}
             previewPhaseLabel={previewPhaseLabel}
+            previewPromptText={previewPromptText}
+            previewPromptStepLabel={previewPromptStepLabel}
             previewFrameIndex={previewFrameIndex}
             previewFrameCount={previewExport?.frames.length ?? 0}
             previewHasFaceLabel={previewHasFaceLabel}
@@ -1513,10 +1580,33 @@ export default function App() {
         ) : null}
 
         {showFloatingPrompt ? (
-          <div className="floating-prompt" aria-live="polite" aria-atomic="true">
-            <p className="prompt-label">{floatingPromptLabel}</p>
-            <strong>{rotatingPrompt}</strong>
-          </div>
+          screen === "phase_recording" ? (
+            <button
+              type="button"
+              className="floating-prompt is-interactive"
+              aria-live="polite"
+              aria-atomic="true"
+              onClick={handleAdvancePrompt}
+            >
+              <p className="prompt-label">{floatingPromptLabel}</p>
+              <strong>{rotatingPrompt}</strong>
+              <span className="floating-prompt-caption">タップで次へ</span>
+            </button>
+          ) : (
+            <div className="floating-prompt is-static" aria-live="polite" aria-atomic="true">
+              <p className="prompt-label">{floatingPromptLabel}</p>
+              <div className="pill-row floating-prompt-pill-row">
+                {currentTheme?.examplePills.map((example) => (
+                  <span key={example} className="example-pill">
+                    {example}
+                  </span>
+                ))}
+              </div>
+              <p className="support-copy floating-prompt-support">
+                {currentTheme?.supportiveHint}
+              </p>
+            </div>
+          )
         ) : null}
       </section>
     </main>

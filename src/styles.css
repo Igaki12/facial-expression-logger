@@ -361,8 +361,11 @@ button {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(14px);
   transform: translateX(-50%);
-  pointer-events: none;
   animation: promptOrbit 9.6s ease-in-out infinite;
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
 }
 
 .floating-prompt::before {
@@ -383,6 +386,46 @@ button {
   font-size: 1.04rem;
   line-height: 1.72;
   color: #fff4e6;
+}
+
+.floating-prompt.is-static {
+  pointer-events: none;
+}
+
+.floating-prompt.is-interactive {
+  cursor: pointer;
+}
+
+.floating-prompt.is-interactive:hover,
+.floating-prompt.is-interactive:focus-visible {
+  border-color: rgba(255, 236, 215, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(255, 233, 204, 0.12),
+    0 0 48px rgba(246, 195, 130, 0.28),
+    0 0 90px rgba(118, 202, 172, 0.18),
+    0 18px 42px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.floating-prompt.is-interactive:focus-visible {
+  outline: 2px solid rgba(247, 216, 172, 0.55);
+  outline-offset: 3px;
+}
+
+.floating-prompt-pill-row {
+  gap: 8px;
+}
+
+.floating-prompt-support {
+  margin-top: 2px;
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.floating-prompt-caption {
+  color: #d9c9b6;
+  font-size: 0.74rem;
+  line-height: 1.4;
 }
 
 .action-row,
@@ -609,6 +652,25 @@ button {
   flex-wrap: wrap;
   color: #dccfbe;
   font-size: 0.92rem;
+}
+
+.preview-topic-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(250, 215, 169, 0.09), rgba(132, 169, 141, 0.08));
+  border: 1px solid rgba(255, 236, 215, 0.1);
+}
+
+.preview-topic-card span,
+.preview-topic-card small {
+  color: #d7c8b2;
+}
+
+.preview-topic-card strong {
+  color: #fff4e6;
+  line-height: 1.7;
 }
 
 .audio-player {

@@ -40,6 +40,14 @@ export interface PhaseRecord {
   promptSetVersion: string;
   sourceWidth: number;
   sourceHeight: number;
+  topicChanges?: TopicChangeRecord[];
+}
+
+export interface TopicChangeRecord {
+  promptIndex: number;
+  promptText: string;
+  elapsedMs: number;
+  timestampMs: number;
 }
 
 export interface FrameRecord {
@@ -49,6 +57,8 @@ export interface FrameRecord {
   timestampMs: number;
   elapsedMs: number;
   hasFace: boolean;
+  promptIndex?: number;
+  promptText?: string;
   faceLandmarks: NormalizedLandmark[][];
   faceBlendshapes: Category[][];
   facialTransformationMatrixes: Matrix[];

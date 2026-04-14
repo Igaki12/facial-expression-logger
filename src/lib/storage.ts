@@ -4,6 +4,7 @@ import type {
   ExperimentRecord,
   FrameRecord,
   PhaseRecord,
+  TopicChangeRecord,
 } from "../types";
 
 const DB_NAME = "facial-expression-logger-db";
@@ -220,6 +221,7 @@ export async function completePhase(
   phaseKey: PhaseRecord["phaseKey"],
   endedAt: string,
   frameCount: number,
+  topicChanges?: TopicChangeRecord[],
 ): Promise<void> {
   const database = await openDatabase();
 
@@ -238,6 +240,7 @@ export async function completePhase(
       ...current,
       endedAt,
       frameCount,
+      topicChanges: topicChanges ?? current.topicChanges,
     } satisfies PhaseRecord);
 
     await transactionToPromise(transaction);

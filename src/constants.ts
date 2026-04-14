@@ -2,7 +2,6 @@ import type { ThemeContent, ThemeKey } from "./types";
 
 export const PHASE_ORDER: ThemeKey[] = ["hobby", "stress"];
 export const FLUSH_BATCH_SIZE = 30;
-export const GUIDE_ROTATION_MS = 4200;
 
 export const PHASE_CONTENT: Record<ThemeKey, ThemeContent> = {
   hobby: {
