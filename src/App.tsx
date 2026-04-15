@@ -1204,6 +1204,15 @@ export default function App() {
     return "完了する";
   }, [currentPhaseKey, flow]);
 
+  const handleHeaderNavigation = useCallback(() => {
+    if (screen === "history") {
+      returnFromHistory();
+      return;
+    }
+
+    openHistory(screen);
+  }, [openHistory, returnFromHistory, screen]);
+
   const condensedError =
     storageError ??
     audioError ??
@@ -1245,10 +1254,10 @@ export default function App() {
           </div>
           <button
             type="button"
-            className="text-link"
-            onClick={() => openHistory(screen)}
+            className="header-nav-button"
+            onClick={handleHeaderNavigation}
           >
-            保存済みデータ
+            {screen === "history" ? "最初のページへ" : "保存済みデータ"}
           </button>
         </header>
 
