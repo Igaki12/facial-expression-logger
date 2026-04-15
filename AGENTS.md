@@ -96,7 +96,13 @@ GitHub Pages 向けの前提:
 - 何を記録しているか、何の研究かは最後の `debrief` で初めて詳しく説明する
 
 ### 3.5 固定プロンプト表示
-- `phase_guide` と `phase_recording` では、回転するきっかけプロンプトを `floating-prompt` として固定表示する
+- `phase_guide` と `phase_recording` では、`floating-prompt` を固定表示する
+- `phase_guide` の `floating-prompt` には、`examplePills` と `supportiveHint` を浮かせて表示する
+- `phase_guide` 本文中に同内容の pills / supportiveHint を重複表示しない
+- `phase_recording` の `floating-prompt` は操作可能にしてよく、ラベルは `今の話題` にする
+- `phase_recording` の話題は時間経過で自動切り替えしない
+- `phase_recording` の話題は `floating-prompt` の tap / click で次へ進める
+- `phase_recording` の `floating-prompt` には、`タップで次へ` のような短い補助文言を小さく載せてよい
 - 配置は画面上部から少し下がった位置を基本にし、動画下部の overlay と被りにくくする
 - 固定プロンプトは前面表示とし、`z-index` を高く保つ
 - 軽い漂い、光彩、背景のゆらぎなどの穏やかな演出を付けてよい
@@ -120,6 +126,14 @@ GitHub Pages 向けの前提:
 - 固定操作エリアを使う場合は、セーフエリアと本文末尾の隠れを考慮する
 - ボタンや履歴操作には Iconify などの外部 SVG アイコンを補助的に使ってよい
 - アイコンは `aria-hidden="true"` とし、操作の意味はテキストまたは `aria-label` で保証する
+
+### 3.8 ヘッダー導線
+- 画面右上には、ページ遷移用の一般的な見た目を持つヘッダーボタンを置いてよい
+- 通常画面ではヘッダーボタンの文言を `データ履歴` にする
+- `history` 画面では同じ位置のヘッダーボタンを `最初のページへ` に切り替え、root へ戻す
+- ヘッダーボタンには right arrow 系の補助アイコンを付けてよい
+- モバイルでヘッダーが折り返す場合も、ヘッダーボタンは右端に寄せる
+- `history` 画面内に、ヘッダー導線と重複する単独の `戻る` ボタンを増やさない
 
 ## 4. 解析方針
 - 主表示は `<video>` によるライブ映像
@@ -162,6 +176,7 @@ Face Landmarker の設定:
 - `endedAt`
 - `frameCount`
 - `promptSetVersion`
+- `topicChanges?`
 
 ### `FrameRecord`
 - `experimentId`
@@ -170,6 +185,8 @@ Face Landmarker の設定:
 - `timestampMs`
 - `elapsedMs`
 - `hasFace`
+- `promptIndex?`
+- `promptText?`
 - `faceLandmarks`
 - `faceBlendshapes`
 - `facialTransformationMatrixes`
@@ -211,12 +228,16 @@ IndexedDB は少なくとも以下の 4 ストアを持つこと。
 ## 6. 記録制御
 - 被験者向け UI には `記録開始` / `記録停止` の生ボタンを常設しない
 - 各フェーズの顔特徴量記録と音声録音は、画面遷移に応じて内部で自動開始・自動停止する
+- `phase_recording` 中の話題切替タイミングは、音声ファイル本体ではなく保存メタデータとして残す
+- 各フレームには、その時点の `promptIndex` / `promptText` を保持してよい
+- 各フェーズには、話題切替の `topicChanges` を時刻付きで保持してよい
 - フレーム保存は React state ではなく `useRef` バッファを使って一定件数ごとに flush する
 - 音声チャンクも React state に積まず、`useRef` バッファに保持してフェーズ終了時に保存する
 - 完了後は顔特徴量データを `1 experiment = 1 JSON` としてエクスポートする
 - 音声はフェーズ別に WebM ファイルとして個別出力する
 - MIME type が `audio/mp4` にフォールバックした場合は、音声出力の拡張子を `.m4a` にする
 - 履歴画面では `JSON` ダウンロードに加えて、保存済みフレームの簡易プレビュー確認機能と音声確認・出力・削除機能を維持する
+- 履歴プレビューでは、可能なら現在フレームの `今の話題` が分かるようにする
 
 録画状態の見せ方:
 
@@ -250,9 +271,13 @@ IndexedDB は少なくとも以下の 4 ストアを持つこと。
 - 1 列レイアウト時の履歴一覧シートを常時展開表示へ戻さない
 - 履歴を開いたときの最新 completed experiment 自動プレビューを外さない
 - 1 列レイアウト時の `確認` 後に一覧シートを閉じる導線を外さない
+- `history` 画面内に重複した戻る導線を増やさない
 - 音声の削除操作で顔特徴量データを削除しない
 - experiment 全体削除では、顔特徴量データと音声データをまとめて削除する
 - 固定プロンプトを通常の本文位置に戻して常設カード化しない
+- `phase_recording` の話題自動ローテーションを復活させない
+- `phase_recording` の tap / click による話題切替導線を外さない
+- `FrameRecord.promptIndex` / `FrameRecord.promptText` / `PhaseRecord.topicChanges` を不用意に削らない
 - `stage-overlay` と固定プロンプトの役割を混ぜない
 - `recording-badge-row` を動画外の通常本文位置へ戻さない
 - Canvas / Video を親要素の幅・高さへ自動追従させる変更を入れない

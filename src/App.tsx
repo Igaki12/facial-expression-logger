@@ -64,6 +64,7 @@ const ACTION_ICON_URLS = {
   camera: "https://api.iconify.design/material-symbols/video-camera-front-outline-rounded.svg?color=%23221717",
   next: "https://api.iconify.design/material-symbols/arrow-forward-rounded.svg?color=%23221717",
   nextLight: "https://api.iconify.design/material-symbols/arrow-forward-rounded.svg?color=%23f7d8ac",
+  backLight: "https://api.iconify.design/material-symbols/arrow-back-rounded.svg?color=%23f7d8ac",
   preview: "https://api.iconify.design/material-symbols/visibility-outline-rounded.svg?color=%23f7d8ac",
   download: "https://api.iconify.design/material-symbols/download-rounded.svg?color=%23f7d8ac",
   delete: "https://api.iconify.design/material-symbols/delete-outline-rounded.svg?color=%23ffe6de",
@@ -1257,8 +1258,17 @@ export default function App() {
             className="header-nav-button"
             onClick={handleHeaderNavigation}
           >
-            <span>{screen === "history" ? "最初のページへ" : "データ履歴"}</span>
-            <ActionIcon src={ACTION_ICON_URLS.nextLight} />
+            {screen === "history" ? (
+              <>
+                <ActionIcon src={ACTION_ICON_URLS.backLight} />
+                <span>戻る</span>
+              </>
+            ) : (
+              <>
+                <span>データ履歴</span>
+                <ActionIcon src={ACTION_ICON_URLS.nextLight} />
+              </>
+            )}
           </button>
         </header>
 
