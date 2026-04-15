@@ -1257,7 +1257,7 @@ export default function App() {
             className="header-nav-button"
             onClick={handleHeaderNavigation}
           >
-            <span>{screen === "history" ? "最初のページへ" : "保存済みデータ"}</span>
+            <span>{screen === "history" ? "最初のページへ" : "データ履歴"}</span>
             <ActionIcon src={ACTION_ICON_URLS.nextLight} />
           </button>
         </header>

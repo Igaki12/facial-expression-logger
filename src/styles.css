@@ -945,6 +945,10 @@ button {
     flex-direction: column;
   }
 
+  .header-nav-button {
+    align-self: flex-end;
+  }
+
   .floating-prompt {
     top: calc(env(safe-area-inset-top, 0px) + 78px);
     width: min(calc(100vw - 20px), 560px);
