@@ -42,7 +42,6 @@ interface HistoryScreenProps {
   formatDateTime: (value: string | null) => string;
   formatBytes: (value: number) => string;
   describeExperiment: (experiment: ExperimentRecord) => string;
-  onReturn: () => void;
   onPreviewExperiment: (experimentId: string) => Promise<void>;
   onDownloadExperiment: (experimentId: string) => Promise<void>;
   onDeleteExperiment: (experimentId: string) => Promise<void>;
@@ -82,7 +81,6 @@ export function HistoryScreen({
   formatDateTime,
   formatBytes,
   describeExperiment,
-  onReturn,
   onPreviewExperiment,
   onDownloadExperiment,
   onDeleteExperiment,
@@ -144,13 +142,6 @@ export function HistoryScreen({
             onClick={() => setIsListOpen(true)}
           >
             一覧
-          </button>
-          <button
-            type="button"
-            className="text-link"
-            onClick={onReturn}
-          >
-            戻る
           </button>
         </div>
       </div>

@@ -1257,7 +1257,8 @@ export default function App() {
             className="header-nav-button"
             onClick={handleHeaderNavigation}
           >
-            {screen === "history" ? "最初のページへ" : "保存済みデータ"}
+            <span>{screen === "history" ? "最初のページへ" : "保存済みデータ"}</span>
+            <ActionIcon src={ACTION_ICON_URLS.nextLight} />
           </button>
         </header>
 
@@ -1556,7 +1557,6 @@ export default function App() {
             formatDateTime={formatDateTime}
             formatBytes={formatBytes}
             describeExperiment={describeExperiment}
-            onReturn={returnFromHistory}
             onPreviewExperiment={handlePreviewExperiment}
             onDownloadExperiment={handleDownloadExperiment}
             onDeleteExperiment={handleDeleteExperiment}
