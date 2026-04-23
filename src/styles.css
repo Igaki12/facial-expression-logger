@@ -431,7 +431,7 @@ button {
   padding: 16px 18px;
   border-radius: 30px;
   border: 1px solid rgba(255, 236, 215, 0.18);
-  background: linear-gradient(135deg, rgba(43, 35, 33, 0.74), rgba(28, 37, 44, 0.74));
+  background: linear-gradient(135deg, rgba(43, 35, 33, 0.6), rgba(28, 37, 44, 0.6));
   box-shadow:
     0 0 0 1px rgba(255, 233, 204, 0.08),
     0 0 40px rgba(246, 195, 130, 0.24),
