@@ -112,6 +112,7 @@ GitHub Pages 向けの前提:
 - `phase_recording` の `floating-prompt` には、`タップで次へ` のような短い補助文言を小さく載せてよい
 - 配置は画面上部から少し下がった位置を基本にし、動画下部の overlay と被りにくくする
 - 固定プロンプトは前面表示とし、`z-index` を高く保つ
+- 固定プロンプトの背景は完全不透明でなく、やや半透明でもよい
 - 軽い漂い、光彩、背景のゆらぎなどの穏やかな演出を付けてよい
 - ただし可読性を損なう過剰な動きにはしない
 - `phase_guide` / `phase_recording` 内に同じ内容のプロンプトカードを重複表示しない
@@ -132,12 +133,10 @@ GitHub Pages 向けの前提:
 - ただし `work_transition` / `completion` / `debrief` / `return_guide` / `history` では通常レイアウトを維持する
 - モバイルの capture 中は、`notice-banner` のような重要なエラー表示は残す
 - モバイルの capture 中は、上下の margin / padding を詰め、縦スクロール量をできるだけ減らす
-- モバイルの capture 中でも、`floating-prompt` / `stage-overlay` / `recording-badge-row` / 固定アクションは維持する
+- モバイルの capture 中でも、`floating-prompt` / `stage-overlay` / `recording-badge-row` は維持する
 - モバイルの capture 中は、空いた上部領域に合わせて `floating-prompt` の位置を少し上げてよい
-- 主要操作は、動画上に重ねるか画面下部に固定する形で近接配置してよい
-- 固定操作エリアはモバイルだけでなく、どの画面幅でも下部固定でよい
-- モバイル以外では固定操作エリアを右寄せのコンパクト幅にし、横幅いっぱいにしない
-- 固定操作エリアを使う場合は、セーフエリアと本文末尾の隠れを考慮する
+- 主要操作は、動画に近い位置へ配置してよいが、常時下部固定にはしなくてよい
+- カメラやマイク権限の取得を妨げないことを優先し、必要なら固定操作エリアは使わない
 - ボタンや履歴操作には Iconify などの外部 SVG アイコンを補助的に使ってよい
 - アイコンは `aria-hidden="true"` とし、操作の意味はテキストまたは `aria-label` で保証する
 
