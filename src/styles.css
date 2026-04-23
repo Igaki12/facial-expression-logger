@@ -24,7 +24,7 @@ body,
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 button,
@@ -40,7 +40,7 @@ button {
 
 .story-shell {
   position: relative;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 18px 14px 32px;
   overflow: hidden;
 }
