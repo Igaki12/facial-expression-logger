@@ -1318,13 +1318,25 @@ export default function App() {
   const showFloatingPrompt =
     (screen === "phase_guide" || screen === "phase_recording") &&
     Boolean(currentTheme);
+  const isMobileCaptureScreen =
+    screen === "camera_check" ||
+    screen === "phase_guide" ||
+    screen === "phase_recording";
 
   return (
-    <main className={`story-shell${showFloatingPrompt ? " has-floating-prompt" : ""}`}>
+    <main
+      className={`story-shell${showFloatingPrompt ? " has-floating-prompt" : ""}${
+        isMobileCaptureScreen ? " is-mobile-capture-layout" : ""
+      }`}
+    >
       <div className="aurora aurora-one" />
       <div className="aurora aurora-two" />
 
-      <section className={`story-panel${screen === "history" ? " is-history" : ""}`}>
+      <section
+        className={`story-panel${screen === "history" ? " is-history" : ""}${
+          isMobileCaptureScreen ? " is-mobile-capture-layout" : ""
+        }`}
+      >
         <header className="story-header">
           <div>
             <p className="eyebrow">Guided Session</p>
@@ -1449,7 +1461,7 @@ export default function App() {
         ) : null}
 
         {screen === "camera_check" ? (
-          <section className="scene-card">
+          <section className="scene-card capture-scene">
             <p className="scene-kicker">準備</p>
             <h2>顔が見える位置に整えます。</h2>
             <p className="scene-copy">
@@ -1487,7 +1499,7 @@ export default function App() {
         ) : null}
 
         {screen === "phase_guide" && currentTheme ? (
-          <section className="scene-card">
+          <section className="scene-card capture-scene">
             <p className="scene-kicker">場面 {currentTheme.shortLabel}</p>
             <h2>{currentTheme.introTitle}</h2>
             <p className="scene-copy">{currentTheme.introLead}</p>
@@ -1514,7 +1526,7 @@ export default function App() {
         ) : null}
 
         {screen === "phase_recording" && currentTheme ? (
-          <section className="scene-card">
+          <section className="scene-card capture-scene">
             <p className="scene-kicker">進行中</p>
             <h2>{currentTheme.recordingTitle}</h2>
             <p className="scene-copy">{currentTheme.recordingLead}</p>

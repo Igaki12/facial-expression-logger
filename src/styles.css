@@ -995,6 +995,38 @@ button {
     flex-direction: column;
   }
 
+  .story-shell.is-mobile-capture-layout {
+    padding-top: 10px;
+    padding-bottom: 16px;
+  }
+
+  .story-shell.is-mobile-capture-layout.has-floating-prompt {
+    padding-bottom: 158px;
+  }
+
+  .story-panel.is-mobile-capture-layout .story-header,
+  .story-panel.is-mobile-capture-layout .progress-strip {
+    display: none;
+  }
+
+  .story-panel.is-mobile-capture-layout .capture-scene {
+    gap: 12px;
+    padding: 14px 14px 12px;
+  }
+
+  .story-panel.is-mobile-capture-layout .capture-scene .scene-kicker,
+  .story-panel.is-mobile-capture-layout .capture-scene .scene-copy {
+    margin-bottom: 0;
+  }
+
+  .story-panel.is-mobile-capture-layout .capture-scene .scene-copy {
+    line-height: 1.6;
+  }
+
+  .story-panel.is-mobile-capture-layout .capture-scene .action-row {
+    margin-top: 2px;
+  }
+
   .header-nav-button {
     align-self: flex-end;
   }
@@ -1003,6 +1035,10 @@ button {
     top: calc(env(safe-area-inset-top, 0px) + 78px);
     width: min(calc(100vw - 20px), 560px);
     padding: 14px 16px;
+  }
+
+  .story-shell.is-mobile-capture-layout .floating-prompt {
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
   }
 
   .video-status-row {
