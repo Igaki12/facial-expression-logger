@@ -49,6 +49,7 @@ type Screen =
   | "work_transition"
   | "completion"
   | "debrief"
+  | "return_guide"
   | "history";
 
 const SCENE_ICON_URLS = {
@@ -58,6 +59,10 @@ const SCENE_ICON_URLS = {
     "https://api.iconify.design/material-symbols/check-circle-outline-rounded.svg?color=%23f7d8ac",
   debrief:
     "https://api.iconify.design/material-symbols/lightbulb-outline.svg?color=%23f7d8ac",
+  return_guide:
+    "https://api.iconify.design/material-symbols/open-in-new-rounded.svg?color=%23f7d8ac",
+  browser_notice:
+    "https://api.iconify.design/material-symbols/language-rounded.svg?color=%23f7d8ac",
 } as const;
 
 const ACTION_ICON_URLS = {
@@ -69,7 +74,12 @@ const ACTION_ICON_URLS = {
   download: "https://api.iconify.design/material-symbols/download-rounded.svg?color=%23f7d8ac",
   delete: "https://api.iconify.design/material-symbols/delete-outline-rounded.svg?color=%23ffe6de",
   audio: "https://api.iconify.design/material-symbols/graphic-eq-rounded.svg?color=%23f7d8ac",
+  copy: "https://api.iconify.design/material-symbols/content-copy-rounded.svg?color=%23f7d8ac",
+  openExternal: "https://api.iconify.design/material-symbols/open-in-new-rounded.svg?color=%23221717",
 } as const;
+
+const APP_URL = "https://igaki12.github.io/facial-expression-logger/";
+const RETURN_DESTINATION_URL = "https://example.com/original-page";
 
 interface FlowState {
   mode: FlowMode;
@@ -194,6 +204,10 @@ function ActionIcon({ src }: { src: string }) {
   return <img src={src} alt="" className="action-icon" aria-hidden="true" />;
 }
 
+function detectRestrictedInAppBrowser(userAgent: string): boolean {
+  return /Line\//i.test(userAgent) || /LIFF/i.test(userAgent) || /FBAN|FBAV|Instagram/i.test(userAgent);
+}
+
 export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -232,6 +246,8 @@ export default function App() {
   const [previewStageSize, setPreviewStageSize] = useState({ width: 0, height: 0 });
   const [historyAudioClips, setHistoryAudioClips] = useState<Record<string, AudioClipRecord[]>>({});
   const [selectedAudio, setSelectedAudio] = useState<SelectedAudioState | null>(null);
+  const [showRestrictedBrowserModal, setShowRestrictedBrowserModal] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   const { stream, status: cameraStatus, error: cameraError, startCamera } = useUserMedia();
   const {
@@ -244,6 +260,14 @@ export default function App() {
   useEffect(() => {
     flowRef.current = flow;
   }, [flow]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") {
+      return;
+    }
+
+    setShowRestrictedBrowserModal(detectRestrictedInAppBrowser(navigator.userAgent));
+  }, []);
 
   useEffect(() => {
     if (location.pathname === "/history") {
@@ -326,6 +350,20 @@ export default function App() {
       }
     };
   }, [selectedAudio]);
+
+  useEffect(() => {
+    if (!copyFeedback) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCopyFeedback(null);
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [copyFeedback]);
 
   useEffect(() => {
     return () => {
@@ -744,6 +782,32 @@ export default function App() {
 
     setScreen("phase_guide");
   }, [cameraStatus, landmarkerStatus]);
+
+  const handleCopyText = useCallback(async (value: string, successMessage: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = value;
+        textArea.setAttribute("readonly", "true");
+        textArea.style.position = "absolute";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+
+      setCopyFeedback(successMessage);
+    } catch (caughtError) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "コピーに失敗しました。";
+      setStorageError(message);
+    }
+  }, []);
 
   const ensurePhaseRecordingStarted = useCallback(async () => {
     const currentFlow = flowRef.current;
@@ -1182,9 +1246,22 @@ export default function App() {
         label: "2",
         active:
           currentPhaseKey === "stress" &&
-          (screen === "phase_guide" || screen === "phase_recording" || screen === "completion" || screen === "debrief"),
+          (
+            screen === "phase_guide" ||
+            screen === "phase_recording" ||
+            screen === "completion" ||
+            screen === "debrief" ||
+            screen === "return_guide"
+          ),
       },
-      { label: "完了", active: screen === "completion" || screen === "debrief" || screen === "history" },
+      {
+        label: "完了",
+        active:
+          screen === "completion" ||
+          screen === "debrief" ||
+          screen === "return_guide" ||
+          screen === "history",
+      },
     ],
     [currentPhaseKey, screen],
   );
@@ -1286,6 +1363,63 @@ export default function App() {
         {condensedError ? (
           <div className="notice-banner" role="alert">
             {condensedError}
+          </div>
+        ) : null}
+
+        {screen === "intro" && showRestrictedBrowserModal ? (
+          <div className="modal-backdrop" role="presentation">
+            <section
+              className="modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="browser-warning-title"
+            >
+              <p className="scene-kicker">ブラウザの確認</p>
+              <div className="scene-icon" aria-hidden="true">
+                <img
+                  src={SCENE_ICON_URLS.browser_notice}
+                  alt=""
+                  className="scene-icon-image"
+                  loading="eager"
+                />
+              </div>
+              <h2 id="browser-warning-title">このブラウザでは続けられない場合があります。</h2>
+              <p className="scene-copy">
+                LINE などのアプリ内ブラウザでは、カメラやマイクの権限が使えないことがあります。
+                Chrome、Safari、Edge などで開き直してください。
+              </p>
+              <div className="url-card">
+                <span>アプリのURL</span>
+                <strong>{APP_URL}</strong>
+              </div>
+              {copyFeedback ? <p className="support-copy">{copyFeedback}</p> : null}
+              <div className="action-column">
+                <button
+                  type="button"
+                  className="primary-action"
+                  onClick={() => void handleCopyText(APP_URL, "アプリのURLをコピーしました。")}
+                >
+                  <ActionIcon src={ACTION_ICON_URLS.copy} />
+                  URLをコピー
+                </button>
+                <a
+                  className="secondary-action action-link"
+                  href={APP_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ActionIcon src={ACTION_ICON_URLS.openExternal} />
+                  このURLを開く
+                </a>
+                <button
+                  type="button"
+                  className="text-link align-left"
+                  onClick={() => setShowRestrictedBrowserModal(false)}
+                >
+                  このまま閉じる
+                </button>
+              </div>
+            </section>
           </div>
         ) : null}
 
@@ -1514,6 +1648,14 @@ export default function App() {
               <button
                 type="button"
                 className="primary-action"
+                onClick={() => setScreen("return_guide")}
+              >
+                <ActionIcon src={ACTION_ICON_URLS.next} />
+                元のページへ戻る
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
                 onClick={() => openHistory("debrief")}
               >
                 データを見る / ダウンロードする
@@ -1531,6 +1673,62 @@ export default function App() {
                 onClick={() => handleStartRetakeFlow("stress")}
               >
                 仕事を撮り直す
+              </button>
+              <button
+                type="button"
+                className="text-link align-left"
+                onClick={() => setScreen("intro")}
+              >
+                最初の画面に戻る
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {screen === "return_guide" ? (
+          <section className="scene-card return-scene">
+            <p className="scene-kicker">終了</p>
+            <div className="scene-icon" aria-hidden="true">
+              <img
+                src={SCENE_ICON_URLS.return_guide}
+                alt=""
+                className="scene-icon-image"
+                loading="eager"
+              />
+            </div>
+            <h2>続きは元のページで進めてください。</h2>
+            <p className="scene-copy">
+              この画面はここで終わりです。案内元のページに戻って次の手順へ進んでください。
+            </p>
+            <div className="url-card">
+              <span>戻り先</span>
+              <strong>{RETURN_DESTINATION_URL}</strong>
+            </div>
+            {copyFeedback ? <p className="support-copy">{copyFeedback}</p> : null}
+            <div className="action-column">
+              <a
+                className="primary-action action-link"
+                href={RETURN_DESTINATION_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ActionIcon src={ACTION_ICON_URLS.openExternal} />
+                元のページを開く
+              </a>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => void handleCopyText(RETURN_DESTINATION_URL, "戻り先のURLをコピーしました。")}
+              >
+                <ActionIcon src={ACTION_ICON_URLS.copy} />
+                アドレスをコピー
+              </button>
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => openHistory("return_guide")}
+              >
+                データを見る
               </button>
               <button
                 type="button"

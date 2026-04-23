@@ -120,6 +120,10 @@ button {
   padding: 0;
 }
 
+.action-link {
+  text-decoration: none;
+}
+
 .header-nav-button {
   align-self: center;
   display: inline-flex;
@@ -185,6 +189,51 @@ button {
   color: #ffe5dc;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 18px 14px;
+  background: rgba(7, 9, 12, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.modal-panel {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 18px;
+  padding: 24px 18px 20px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 238, 214, 0.12);
+  background:
+    linear-gradient(180deg, rgba(43, 35, 33, 0.96), rgba(19, 27, 34, 0.96));
+  box-shadow:
+    0 18px 52px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.url-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 244, 229, 0.1);
+}
+
+.url-card span {
+  color: #d0c1ae;
+  font-size: 0.84rem;
+}
+
+.url-card strong {
+  overflow-wrap: anywhere;
+  color: #fff4e6;
+  line-height: 1.7;
+}
+
 .scene-card {
   display: grid;
   gap: 18px;
@@ -201,7 +250,8 @@ button {
 .intro-scene,
 .completion-scene,
 .debrief-scene,
-.transition-scene {
+.transition-scene,
+.return-scene {
   min-height: 54vh;
   align-content: center;
 }
