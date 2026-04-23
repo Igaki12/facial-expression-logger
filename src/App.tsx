@@ -60,22 +60,22 @@ const SCENE_ICON_URLS = {
   debrief:
     "https://api.iconify.design/material-symbols/lightbulb-outline.svg?color=%23f7d8ac",
   return_guide:
-    "https://api.iconify.design/material-symbols/open-in-new-rounded.svg?color=%23f7d8ac",
+    "https://api.iconify.design/material-symbols/open-in-new.svg?color=%23f7d8ac",
   browser_notice:
-    "https://api.iconify.design/material-symbols/language-rounded.svg?color=%23f7d8ac",
+    "https://api.iconify.design/material-symbols/info-outline.svg?color=%23f7d8ac",
 } as const;
 
 const ACTION_ICON_URLS = {
-  camera: "https://api.iconify.design/material-symbols/video-camera-front-outline-rounded.svg?color=%23221717",
-  next: "https://api.iconify.design/material-symbols/arrow-forward-rounded.svg?color=%23221717",
-  nextLight: "https://api.iconify.design/material-symbols/arrow-forward-rounded.svg?color=%23f7d8ac",
-  backLight: "https://api.iconify.design/material-symbols/arrow-back-rounded.svg?color=%23f7d8ac",
-  preview: "https://api.iconify.design/material-symbols/visibility-outline-rounded.svg?color=%23f7d8ac",
-  download: "https://api.iconify.design/material-symbols/download-rounded.svg?color=%23f7d8ac",
-  delete: "https://api.iconify.design/material-symbols/delete-outline-rounded.svg?color=%23ffe6de",
-  audio: "https://api.iconify.design/material-symbols/graphic-eq-rounded.svg?color=%23f7d8ac",
-  copy: "https://api.iconify.design/material-symbols/content-copy-rounded.svg?color=%23f7d8ac",
-  openExternal: "https://api.iconify.design/material-symbols/open-in-new-rounded.svg?color=%23221717",
+  camera: "https://api.iconify.design/material-symbols/settings-video-camera-outline-rounded.svg?color=%23221717",
+  next: "https://api.iconify.design/material-symbols/arrow-forward.svg?color=%23221717",
+  nextLight: "https://api.iconify.design/material-symbols/arrow-forward.svg?color=%23f7d8ac",
+  backLight: "https://api.iconify.design/material-symbols/arrow-back.svg?color=%23f7d8ac",
+  preview: "https://api.iconify.design/material-symbols/visibility.svg?color=%23f7d8ac",
+  download: "https://api.iconify.design/material-symbols/download.svg?color=%23f7d8ac",
+  delete: "https://api.iconify.design/material-symbols/delete.svg?color=%23ffe6de",
+  audio: "https://api.iconify.design/material-symbols/equalizer-rounded.svg?color=%23f7d8ac",
+  copy: "https://api.iconify.design/mdi/content-copy.svg?color=%23f7d8ac",
+  openExternal: "https://api.iconify.design/material-symbols/open-in-new.svg?color=%23221717",
 } as const;
 
 const APP_URL = "https://igaki12.github.io/facial-expression-logger/";
