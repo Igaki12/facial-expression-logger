@@ -189,6 +189,21 @@ button {
   color: #ffe5dc;
 }
 
+.notice-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 50%;
+  z-index: 80;
+  width: min(calc(100vw - 28px), 560px);
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: rgba(76, 56, 82, 0.95);
+  border: 1px solid rgba(255, 219, 219, 0.22);
+  color: #ffeef0;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
+  transform: translateX(-50%);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -987,6 +1002,32 @@ button {
 @media (max-width: 560px) {
   .story-header {
     flex-direction: column;
+  }
+
+  .intro-copy-cloud {
+    display: grid;
+    width: min(100%, 330px);
+    margin-inline: auto;
+    justify-content: stretch;
+  }
+
+  .intro-copy-cloud span {
+    width: max-content;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .intro-copy-cloud span:nth-child(1) {
+    justify-self: start;
+  }
+
+  .intro-copy-cloud span:nth-child(2) {
+    justify-self: end;
+  }
+
+  .intro-copy-cloud span:nth-child(3) {
+    justify-self: start;
+    margin-left: 22px;
   }
 
   .story-shell.is-mobile-capture-layout {

@@ -2,6 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 
 type CameraStatus = "idle" | "requesting" | "ready" | "error";
 
+function formatUserMediaError(caughtError: unknown): string {
+  if (caughtError instanceof Error) {
+    const isPermissionError =
+      caughtError.name === "NotAllowedError" ||
+      caughtError.name === "PermissionDeniedError" ||
+      /permission denied/i.test(caughtError.message);
+
+    if (isPermissionError) {
+      return "カメラやマイクの権限が得られませんでした。ChromeやSafariなどデフォルトのブラウザを使用してください。";
+    }
+
+    return caughtError.message;
+  }
+
+  return "カメラとマイクへのアクセスに失敗しました。";
+}
+
 export function useUserMedia() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [status, setStatus] = useState<CameraStatus>("idle");
@@ -37,11 +54,7 @@ export function useUserMedia() {
       setStatus("ready");
       return nextStream;
     } catch (caughtError) {
-      const message =
-        caughtError instanceof Error
-          ? caughtError.message
-          : "カメラとマイクへのアクセスに失敗しました。";
-      setError(message);
+      setError(formatUserMediaError(caughtError));
       setStatus("error");
       throw caughtError;
     }

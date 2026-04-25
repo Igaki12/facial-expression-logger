@@ -1373,7 +1373,7 @@ export default function App() {
         </div>
 
         {condensedError ? (
-          <div className="notice-banner" role="alert">
+          <div className="notice-toast" role="alert">
             {condensedError}
           </div>
         ) : null}
@@ -1463,7 +1463,6 @@ export default function App() {
         {screen === "camera_check" ? (
           <section className="scene-card capture-scene">
             <p className="scene-kicker">準備</p>
-            <h2>顔が見える位置に整えます。</h2>
             <p className="scene-copy">
               カメラとマイクを使います。声も一緒に記録します。
             </p>
@@ -1476,24 +1475,27 @@ export default function App() {
             </div>
 
             <div className="action-row stacked-on-mobile">
-              <button
-                type="button"
-                className="primary-action"
-                onClick={handlePrepareCamera}
-                disabled={cameraStatus === "ready" || landmarkerStatus === "loading" || isBusy}
-              >
-                <ActionIcon src={ACTION_ICON_URLS.camera} />
-                {cameraStatus === "ready" ? "準備OK" : "カメラとマイクを許可"}
-              </button>
-              <button
-                type="button"
-                className="secondary-action"
-                onClick={handleContinueFromCamera}
-                disabled={cameraStatus !== "ready" || landmarkerStatus !== "ready" || isBusy}
-              >
-                <ActionIcon src={ACTION_ICON_URLS.nextLight} />
-                次へ
-              </button>
+              {cameraStatus === "ready" ? (
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={handleContinueFromCamera}
+                  disabled={landmarkerStatus !== "ready" || isBusy}
+                >
+                  <ActionIcon src={ACTION_ICON_URLS.nextLight} />
+                  次へ
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="primary-action"
+                  onClick={handlePrepareCamera}
+                  disabled={cameraStatus === "requesting" || landmarkerStatus === "loading" || isBusy}
+                >
+                  <ActionIcon src={ACTION_ICON_URLS.camera} />
+                  カメラとマイクを許可
+                </button>
+              )}
             </div>
           </section>
         ) : null}
