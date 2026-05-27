@@ -524,6 +524,49 @@ button {
   text-align: right;
 }
 
+.camera-facing-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 244, 229, 0.1);
+}
+
+.camera-facing-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #e9dfd3;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.camera-facing-option:hover:enabled {
+  transform: translateY(-1px);
+}
+
+.camera-facing-option.is-selected {
+  color: #fff4e6;
+  border-color: rgba(247, 216, 172, 0.26);
+  background: linear-gradient(135deg, rgba(246, 195, 130, 0.2), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.camera-facing-option:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .action-row,
 .action-column,
 .history-actions {

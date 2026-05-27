@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type CameraStatus = "idle" | "requesting" | "ready" | "error";
+type CameraFacingMode = "user" | "environment";
 
 function formatUserMediaError(caughtError: unknown): string {
   if (caughtError instanceof Error) {
@@ -32,7 +33,7 @@ export function useUserMedia() {
     setStatus("idle");
   }, []);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (facingMode: CameraFacingMode = "user") => {
     if (stream) {
       return stream;
     }
@@ -44,7 +45,7 @@ export function useUserMedia() {
       const nextStream = await navigator.mediaDevices.getUserMedia({
         audio: true,
         video: {
-          facingMode: "user",
+          facingMode: { ideal: facingMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },

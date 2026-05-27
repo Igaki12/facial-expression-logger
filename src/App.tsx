@@ -52,6 +52,8 @@ type Screen =
   | "return_guide"
   | "history";
 
+type CameraFacingMode = "user" | "environment";
+
 const SCENE_ICON_URLS = {
   work_transition:
     "https://api.iconify.design/material-symbols/engineering-outline-rounded.svg?color=%23f7d8ac",
@@ -67,6 +69,8 @@ const SCENE_ICON_URLS = {
 
 const ACTION_ICON_URLS = {
   camera: "https://api.iconify.design/material-symbols/settings-video-camera-outline-rounded.svg?color=%23221717",
+  frontCamera: "https://api.iconify.design/mdi/camera-front.svg?color=%23f7d8ac",
+  backCamera: "https://api.iconify.design/mdi/camera-rear.svg?color=%23f7d8ac",
   next: "https://api.iconify.design/material-symbols/arrow-forward.svg?color=%23221717",
   nextLight: "https://api.iconify.design/material-symbols/arrow-forward.svg?color=%23f7d8ac",
   backLight: "https://api.iconify.design/material-symbols/arrow-back.svg?color=%23f7d8ac",
@@ -248,6 +252,7 @@ export default function App() {
   const [selectedAudio, setSelectedAudio] = useState<SelectedAudioState | null>(null);
   const [showRestrictedBrowserModal, setShowRestrictedBrowserModal] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>("user");
 
   const { stream, status: cameraStatus, error: cameraError, startCamera } = useUserMedia();
   const {
@@ -768,11 +773,11 @@ export default function App() {
 
     try {
       await initialize();
-      await startCamera();
+      await startCamera(cameraFacingMode);
     } catch {
       // Hook state surfaces the error text.
     }
-  }, [initialize, startCamera]);
+  }, [cameraFacingMode, initialize, startCamera]);
 
   const handleContinueFromCamera = useCallback(() => {
     if (cameraStatus !== "ready" || landmarkerStatus !== "ready") {
@@ -1466,6 +1471,31 @@ export default function App() {
             <p className="scene-copy">
               カメラとマイクを使います。声も一緒に記録します。
             </p>
+
+            {cameraStatus !== "ready" ? (
+              <div className="camera-facing-toggle" role="group" aria-label="使用するカメラ">
+                <button
+                  type="button"
+                  className={`camera-facing-option${cameraFacingMode === "user" ? " is-selected" : ""}`}
+                  aria-pressed={cameraFacingMode === "user"}
+                  onClick={() => setCameraFacingMode("user")}
+                  disabled={cameraStatus === "requesting" || landmarkerStatus === "loading" || isBusy}
+                >
+                  <ActionIcon src={ACTION_ICON_URLS.frontCamera} />
+                  <span>前面</span>
+                </button>
+                <button
+                  type="button"
+                  className={`camera-facing-option${cameraFacingMode === "environment" ? " is-selected" : ""}`}
+                  aria-pressed={cameraFacingMode === "environment"}
+                  onClick={() => setCameraFacingMode("environment")}
+                  disabled={cameraStatus === "requesting" || landmarkerStatus === "loading" || isBusy}
+                >
+                  <ActionIcon src={ACTION_ICON_URLS.backCamera} />
+                  <span>背面</span>
+                </button>
+              </div>
+            ) : null}
 
             <div className="video-stage">
               <video ref={videoRef} className="camera-video" playsInline muted />
