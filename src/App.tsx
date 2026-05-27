@@ -1501,7 +1501,7 @@ export default function App() {
         ) : null}
 
         {screen === "phase_guide" && currentTheme ? (
-          <section className="scene-card capture-scene">
+          <section className="scene-card capture-scene phase-guide-scene">
             <p className="scene-kicker">場面 {currentTheme.shortLabel}</p>
             <h2>{currentTheme.introTitle}</h2>
             <p className="scene-copy">{currentTheme.introLead}</p>
@@ -1528,7 +1528,7 @@ export default function App() {
         ) : null}
 
         {screen === "phase_recording" && currentTheme ? (
-          <section className="scene-card capture-scene">
+          <section className="scene-card capture-scene phase-recording-scene">
             <p className="scene-kicker">進行中</p>
             <h2>{currentTheme.recordingTitle}</h2>
             <p className="scene-copy">{currentTheme.recordingLead}</p>

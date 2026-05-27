@@ -1049,6 +1049,15 @@ button {
     padding: 14px 14px 12px;
   }
 
+  .story-panel.is-mobile-capture-layout .phase-guide-scene {
+    padding-top: 176px;
+  }
+
+  .story-panel.is-mobile-capture-layout .phase-recording-scene h2,
+  .story-panel.is-mobile-capture-layout .phase-recording-scene .scene-copy {
+    display: none;
+  }
+
   .story-panel.is-mobile-capture-layout .capture-scene .scene-kicker,
   .story-panel.is-mobile-capture-layout .capture-scene .scene-copy {
     margin-bottom: 0;
