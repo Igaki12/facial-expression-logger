@@ -1459,7 +1459,7 @@ export default function App() {
                 onClick={handleStartGuidedFlow}
               >
                 <ActionIcon src={ACTION_ICON_URLS.next} />
-                実験を始める
+                検査を始める
               </button>
             </div>
           </section>
